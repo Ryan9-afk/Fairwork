@@ -28,7 +28,8 @@ export default function HomePage() {
   const [form, setForm] = useState({ employer: "", location: "", date: "2026-09-20", start: "08:00", end: "17:30", agreed: "1200", paid: "1000", sunday: true });
   const t = copy[lang];
   const result = useMemo(() => audit(Number(form.agreed) || 0, Number(form.paid) || 0, form.start, form.end, form.sunday), [form]);
-  useEffect(() => { const stored = window.localStorage.getItem("fairwork-pulse-shifts"); if (stored) { try { setShifts(JSON.parse(stored)) } catch {} } }, []);
+  useEffect(() => { const stored = window.localStorage.getItem("fairwork-pulse-shifts"); if (stored) { try { setShifts(JSON.parse(stored)) } catch {} } const requested = new URLSearchParams(window.location.search).get("screen") || "home"; if (["home", "records", "incidents", "dossier"].includes(requested)) setActive(requested) }, []);
+  function navigate(id: string) { setActive(id); setIncidentType(""); const url = id === "home" ? window.location.pathname : `${window.location.pathname}?screen=${id}`; window.history.replaceState(null, "", url); window.scrollTo({ top: 0, behavior: "smooth" }) }
   function showToast(message: string) { setToastMessage(message); setSavedPulse(true); setTimeout(() => setSavedPulse(false), 2200) }
   function submit(e: FormEvent) { e.preventDefault(); const next: Shift = { id: Date.now(), date: form.date, employer: form.employer || "Employer not named", location: form.location || "Site not named", start: form.start, end: form.end, agreed: Number(form.agreed), paid: Number(form.paid), sunday: form.sunday }; const updated = [next, ...shifts]; setShifts(updated); window.localStorage.setItem("fairwork-pulse-shifts", JSON.stringify(updated)); showToast("Shift saved to your device") }
   const totalOwed = shifts.reduce((sum, shift) => sum + audit(shift.agreed, shift.paid, shift.start, shift.end, shift.sunday).total, 0);
@@ -42,7 +43,7 @@ export default function HomePage() {
     <div className="desktop-grid" id="top">
       <aside className="side-nav" aria-label="Primary navigation">
         <div className="worker-card"><div className="worker-avatar">AM</div><div><strong>Amina M.</strong><span>Construction · Nairobi</span></div></div>
-        <nav>{nav.map(([id, Icon, label]) => <Button variant="iosPlain" key={id} className={active === id ? "nav-item active" : "nav-item"} onClick={() => setActive(id)}><Icon size={20} /><span>{label}</span>{id === "incidents" && <i>1</i>}</Button>)}</nav>
+        <nav>{nav.map(([id, Icon, label]) => <Button type="button" variant="iosPlain" key={id} className={active === id ? "nav-item active" : "nav-item"} aria-current={active === id ? "page" : undefined} onClick={() => navigate(id)}><Icon size={20} /><span>{label}</span>{id === "incidents" && <i>1</i>}</Button>)}</nav>
         <div className="offline-note"><ShieldCheck size={20} /><strong>{t.private}</strong><p>{t.privateText}</p></div>
       </aside>
       <section className={active === "home" ? "main-column" : "main-column show-secondary"}>
@@ -84,7 +85,7 @@ export default function HomePage() {
         <p className="legal-note"><ShieldCheck size={16} /> Calculations are guidance, not legal advice. A labour officer can review your dossier.</p>
       </aside>
     </div>
-    <nav className="mobile-nav" aria-label="Mobile navigation">{nav.map(([id, Icon, label]) => <Button variant="iosPlain" key={id} className={active === id ? "active" : ""} onClick={() => setActive(id)}><Icon size={21} /><span>{label}</span></Button>)}</nav>
+    <nav className="mobile-nav" aria-label="Mobile navigation">{nav.map(([id, Icon, label]) => <Button type="button" variant="iosPlain" key={id} className={active === id ? "active" : ""} aria-current={active === id ? "page" : undefined} onClick={() => navigate(id)}><Icon size={21} /><span>{label}</span></Button>)}</nav>
     <div className={savedPulse ? "toast show" : "toast"}><Check size={18} /><span>{toastMessage}</span></div>
   </main>
 }
