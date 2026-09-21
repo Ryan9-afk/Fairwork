@@ -5,17 +5,9 @@
   command = "npm run build:next"
   publish = ".next"
 
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
-
 [build.environment]
   NODE_VERSION = "22"
   NPM_FLAGS = "--legacy-peer-deps"
-
-# Required Environment Variables in Netlify Dashboard:
-# - NEXT_PUBLIC_SUPABASE_URL: Your Supabase project URL (e.g. https://xyz.supabase.co)
-# - NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: Your Supabase publishable/anon API key
-# - GEMINI_API_KEY: Google Gemini API key for the AI Legal Rights Assistant
 
 # Security and caching headers
 [[headers]]
