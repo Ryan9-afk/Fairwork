@@ -155,6 +155,20 @@ export interface ShiftAuditResult {
   isMinimumWageShortfall: boolean;
   sectorName: string;
   citations: { act: string; sections: string; title: string }[];
+  lineItems: AuditLineItem[];
+  assumptions: string[];
+  reviewStatus: "recorded" | "needs-review";
+}
+
+export interface AuditLineItem {
+  id: "agreed-pay" | "payment-received" | "payment-gap" | "overtime-estimate";
+  label: string;
+  amount: number;
+  kind: "recorded" | "estimate";
+  explanation: string;
+  ruleId?: string;
+  sourceUrl?: string;
+  reviewStatus: "recorded" | "needs-review";
 }
 
 export function parseHoursBetween(start: string, end: string): number {
@@ -208,5 +222,17 @@ export function calculateSectorAudit(
     isMinimumWageShortfall,
     sectorName: config.name,
     citations: config.statutoryCitations,
+    lineItems: [
+      { id: "agreed-pay", label: "Agreed pay", amount: agreedPay, kind: "recorded", explanation: "The amount entered as agreed for this shift.", reviewStatus: "recorded" },
+      { id: "payment-received", label: "Payment recorded", amount: amountReceived, kind: "recorded", explanation: "The amount entered as received for this shift.", reviewStatus: "recorded" },
+      { id: "payment-gap", label: "Unpaid agreed amount", amount: wageDeficit, kind: "recorded", explanation: "Agreed pay minus the payment recorded, never below zero.", ruleId: "EMP-17-19", sourceUrl: "https://new.kenyalaw.org/akn/ke/act/2007/11/eng@2012-01-02", reviewStatus: "recorded" },
+      { id: "overtime-estimate", label: "Estimated additional entitlement", amount: overtimePayDue, kind: "estimate", explanation: `${overtimeHours.toFixed(1)} hours above ${config.standardDailyHours} hours, using a ${multiplier.toFixed(1)}x multiplier and an hourly rate derived from the entered daily pay.`, ruleId: "WAGES-R5-6", sourceUrl: "https://new.kenyalaw.org/", reviewStatus: "needs-review" },
+    ],
+    assumptions: [
+      "Times entered represent working time; unpaid breaks have not been deducted.",
+      "The entered agreed pay is used to derive the hourly rate.",
+      "Overtime and minimum-wage treatment can vary by occupation, location, and current wage order.",
+    ],
+    reviewStatus: overtimePayDue > 0 || isMinimumWageShortfall ? "needs-review" : "recorded",
   };
 }

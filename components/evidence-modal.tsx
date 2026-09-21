@@ -166,7 +166,7 @@ export function EvidenceModal({
                   <ShieldCheck size={16} className="text-emerald-600 shrink-0 mt-0.5" />
                   <div className="overflow-hidden">
                     <span className="text-[10px] font-semibold text-emerald-800 uppercase tracking-wider block">
-                      SHA-256 Tamper-Proof Audit Hash
+                      SHA-256 File Integrity Hash
                     </span>
                     <code className="text-[10px] text-emerald-700 font-mono break-all leading-tight block">
                       {sha256}

@@ -100,7 +100,7 @@ export function ImageViewerModal({
           ) : attachment.isEncrypted && !attachment.dataUrl ? (
             <div className="text-center p-6 text-amber-200">
               <ShieldCheck size={44} className="mx-auto mb-2 text-amber-400 animate-pulse" />
-              <span className="text-xs font-bold block text-white">Zero-Knowledge Encrypted</span>
+              <span className="text-xs font-bold block text-white">Encrypted on device</span>
               <span className="text-[11px] text-amber-300/80 max-w-xs block mx-auto mt-1">
                 This evidence is encrypted with your master PIN (AES-GCM-256). Unlock the vault to preview.
               </span>
@@ -158,7 +158,7 @@ export function ImageViewerModal({
               })}
             </span>
             <span className="text-[10px] font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
-              Admissible Evidence
+              Indexed Evidence
             </span>
           </div>
         </div>

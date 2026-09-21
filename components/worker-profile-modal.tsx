@@ -32,6 +32,7 @@ export function WorkerProfileModal({
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- the form mirrors the selected persisted profile */
   useEffect(() => {
     if (profile) {
       setName(profile.name || "");
@@ -45,6 +46,7 @@ export function WorkerProfileModal({
       setSector("construction");
     }
   }, [profile]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!isOpen) return null;
 
@@ -242,7 +244,7 @@ export function WorkerProfileModal({
           <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-100/80 flex items-start gap-2">
             <ShieldCheck size={16} className="text-emerald-700 shrink-0 mt-0.5" />
             <p className="text-[11px] text-emerald-900 leading-snug">
-              <strong>Local-First Guarantee:</strong> Your personal details remain stored on your device. When encrypted with your PIN, they are sealed with AES-GCM-256.
+              <strong>Device-first profile:</strong> Details stay on this device until you choose cloud backup. Profile fields are included in that backup; sensitive record content can be encrypted with your PIN.
             </p>
           </div>
 

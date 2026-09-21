@@ -87,7 +87,7 @@ export function VaultLockModal({
             ? "Your vault is currently unlocked in memory. You can lock it anytime to purge plaintext records from memory."
             : isConfigured
             ? "Your wage rates, cash received, and incident notes are encrypted on-device with AES-GCM-256."
-            : "Protect sensitive wages and evidence with a local master PIN. Nothing unencrypted ever leaves this device."}
+            : "Protect sensitive wages and evidence with a local master PIN before choosing an optional cloud backup."}
         </p>
 
         {!isLocked ? (

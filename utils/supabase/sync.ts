@@ -1,8 +1,8 @@
 /**
- * Zero-Knowledge Supabase Synchronization Engine for Fairwork Pulse.
+ * Client-side encrypted Supabase backup engine for Fairwork Pulse.
  * Synchronizes local IndexedDB shifts, incidents, and evidence records with Supabase PostgreSQL.
- * If zero-knowledge encryption is active, only ciphertext and metadata are sent,
- * ensuring the server never holds unencrypted wage, incident, or evidence details.
+ * If client-side encryption is active, sensitive content is sent as ciphertext alongside operational metadata,
+ * so sensitive wage, incident, and evidence content can be uploaded as ciphertext.
  */
 
 import { createClient } from "./client";
@@ -141,7 +141,7 @@ export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<
       const shouldEncrypt = !!(ev.isEncrypted || vaultKey);
 
       // Determine upload blob:
-      // When zero-knowledge encryption is active (ev.isEncrypted or vaultKey available),
+      // When client-side encryption is active (ev.isEncrypted or vaultKey available),
       // upload the AES-256-GCM ciphertext payload, NEVER the raw image blob.
       try {
         let uploadBlob: Blob | null = null;
@@ -164,7 +164,7 @@ export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<
           uploadContentType = "application/json";
           uploadExtension = "enc.json";
         } else if (!shouldEncrypt && ev.dataUrl && ev.dataUrl.startsWith("data:")) {
-          // Plaintext upload only if user has never configured a zero-knowledge vault
+          // Plaintext upload only if the user has not configured the client-side encrypted vault
           const res = await fetch(ev.dataUrl);
           uploadBlob = await res.blob();
         }

@@ -16,7 +16,7 @@
 
 **Fairwork Pulse** is a mobile-first "Pocket Evidence Wallet" engineered for Kenya's **~15 million informal, casual, and gig workers**—including construction fundis and mjengo casuals, agricultural and tea-estate pickers, domestic caregivers, and app-based delivery riders.
 
-Because casual workers often lack written contracts or payslips, they are routinely vulnerable to wage withholding, unlawful deductions, unpaid overtime, and uncompensated injuries. **Fairwork Pulse** puts contemporaneous, court-admissible record keeping directly into the hands of the worker—not the employer or platform.
+Because casual workers often lack written contracts or payslips, they are routinely vulnerable to wage withholding, unlawful deductions, unpaid overtime, and uncompensated injuries. **Fairwork Pulse** helps workers keep contemporaneous records they can organize for discussion with an adviser, labour officer, or union representative.
 
 > **Core Promise:** *Proof of Work. Power to Remedy.*
 
@@ -33,15 +33,15 @@ Built for the **Strathmore / iLab Africa Hackathon 2026** (Nairobi, Kenya).
                      └───────┬──────────────────────────────┬───────┘
                              │                              │
              ┌───────────────▼──────────────┐       ┌───────▼──────────────────────┐
-             │   1. CLIENT-SIDE ENCRYPTED   │       │   2. TAMPER-PROOF EVIDENCE   │
-             │             VAULT            │       │         ATTACHMENTS          │
+             │   1. CLIENT-SIDE ENCRYPTED   │       │   2. EVIDENCE INTEGRITY      │
+             │             VAULT            │       │       INTEGRITY CHECKS       │
              │   - PBKDF2 (100k iters)      │       │   - M-Pesa / Receipt Capture │
              │   - AES-GCM-256 Web Crypto   │       │   - Native SHA-256 Hash      │
              │   - Local-First IndexedDB    │       │   - Court Chain-of-Custody   │
              └───────────────┬──────────────┘       └───────┬──────────────────────┘
                              │                              │
              ┌───────────────▼──────────────┐       ┌───────▼──────────────────────┐
-             │   3. GEMINI AI ASSISTANT     │       │   4. ZERO-KNOWLEDGE CLOUD    │
+             │   3. GEMINI AI ASSISTANT     │       │   4. ENCRYPTED CLOUD BACKUP  │
              │   - Bilingual (EN & SW)      │       │             SYNC             │
              │   - Employment Act 2007      │       │   - Supabase PostgreSQL      │
              │   - Offline Rules Fallback   │       │   - Strict RLS & Storage     │
@@ -50,7 +50,7 @@ Built for the **Strathmore / iLab Africa Hackathon 2026** (Nairobi, Kenya).
              ┌───────────────▼──────────────┐       ┌───────▼──────────────────────┐
              │   5. REGIONAL RISK MONITOR   │       │   6. DYNAMIC STATUTORY       │
              │   - Sub-County Telemetry     │       │         RULES ENGINE         │
-             │   - Differential Privacy     │       │   - 1.5x Daily Overtime      │
+             │   - Illustrative Aggregates  │       │   - 1.5x Daily Overtime      │
              │   - COTU-K / Labour Officers │       │   - 2.0x Sunday Double-Time  │
              └───────────────┬──────────────┘       └───────┬──────────────────────┘
                              │                              │
@@ -64,30 +64,30 @@ Built for the **Strathmore / iLab Africa Hackathon 2026** (Nairobi, Kenya).
                              └──────────────────────────────┘
 ```
 
-### 1. Zero-Knowledge Client-Side Encrypted Vault
+### 1. Client-Side Encrypted Vault
 - **Master PIN Derivation**: Uses the browser's native **Web Crypto API** with **PBKDF2** (100,000 iterations, SHA-256) and a unique cryptographic salt.
 - **Authenticated Encryption**: Sensitive financial amounts, employer identities, and dispute notes are encrypted using **AES-GCM-256** directly on the worker's device.
 - **Offline Persistence**: Shift and incident indices are stored in browser **IndexedDB** (`fairwork_pulse_vault_v1`). Plaintext dates remain locally searchable while financial values stay encrypted.
 
-### 2. Tamper-Proof Evidence & Image Attachment with SHA-256 Chain of Custody
+### 2. Evidence Attachments with SHA-256 Integrity Checks
 - **M-Pesa & Receipt Capture**: Workers attach photos of M-Pesa SMS confirmations, paper wage vouchers, gate badges, or clinical injury treatment cards.
 - **Cryptographic Digest**: The client immediately computes a raw 256-bit **SHA-256 byte-hash** (`crypto.subtle.digest`) on the binary image before storage.
 - **Interactive Lightbox**: Full-resolution image preview, document classification badges, timestamp verification, and SHA-256 inspection.
-- **Court Admissibility**: The cryptographic hash is permanently stamped into the **Haki Dossier**, establishing contemporaneous chain-of-custody under Kenyan evidence rules.
+- **Evidence Index**: The cryptographic hash is recorded in the **Haki Dossier** so a later copy can be compared with the captured file. The app does not determine legal admissibility.
 
 ### 3. Bilingual Gemini AI Legal Rights Assistant
 - **Kenya Labour Law Intelligence**: Powered by Google Gemini (`gemini-2.5-flash`), with a system prompt strictly grounded in the *Employment Act 2007*, *Regulation of Wages (General) Order*, and *Work Injury Benefits Act (WIBA) 2007*.
 - **English & Sheng/Kiswahili Support**: Allows casual workers to ask questions in their preferred language (e.g. *"Mwajiri amekataa kunilipa overtime ya Sunday, nifanye nini?"*).
 - **Graceful Offline Fallback**: If network connectivity drops, the assistant switches to an embedded offline statutory knowledge base without failing.
 
-### 4. Zero-Knowledge Supabase Cloud Sync
+### 4. Encrypted Supabase Cloud Backup
 - **PostgreSQL Database**: Configured with tables for `profiles`, `shifts`, `incidents`, and `evidence_files`.
 - **Row Level Security (RLS)**: Enforces tenant isolation on all tables using cached `(select auth.uid()) = user_id` policies.
 - **Private Storage Bucket**: Dedicated `evidence-vault` bucket with path-scoped RLS policies (`${user.id}/${evidence.id}.${ext}`).
-- **Zero-Knowledge Principle**: When encryption is active, only AES-GCM ciphertext payloads and hashes are uploaded. The server database never stores unencrypted wage rates or dispute notes.
+- **Encryption boundary**: With a PIN active, wage values, employer details, incident narratives, and evidence content upload as AES-GCM ciphertext. Profile fields, record dates, categories, and operational metadata remain readable to the service.
 
 ### 5. Anonymized Regional Regulator & Union Risk Monitor
-- **Differential Privacy ($k \ge 5$)**: Aggregates risk telemetry across Kenyan sub-counties (Kilimani, Embakasi, Naivasha, Nakuru West, Kisumu) without revealing individual worker identities.
+- **Illustrative Aggregation**: The regulator view demonstrates how regional trends could be shown once a sufficient, consented dataset and privacy review exist. Its current values are sample data.
 - **Labour Inspector Telemetry**: Gives COTU-K union reps and Sub-County Labour Officers heatmap visibility into systemic wage withholding and safety hotspots.
 
 ### 6. Dynamic Kenyan Legal Rules Engine
@@ -171,7 +171,7 @@ npm run build
 
 ## 🌐 Deploying to Netlify
 
-This repository is pre-configured for zero-friction Netlify deployment using [`netlify.toml`](netlify.toml).
+This repository includes a Netlify deployment configuration in [`netlify.toml`](netlify.toml).
 
 ### Option A: 1-Click Netlify Import
 1. Push this repository to your GitHub account (`ryanreo/fairwork-pulse`).

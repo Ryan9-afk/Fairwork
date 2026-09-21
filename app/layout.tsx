@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { OfflineRuntime } from "@/components/offline-runtime";
 
 export const metadata: Metadata = {
   title: "Fairwork Pulse — Your work record",
   description: "Offline-first shift records, wage audits, incident evidence, and Haki Dossiers for Kenyan workers.",
+  manifest: "/manifest.webmanifest",
   other: {
     "codex-preview": "development",
   },
@@ -20,7 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased"><OfflineRuntime />{children}</body>
     </html>
   );
 }

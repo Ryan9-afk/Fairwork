@@ -22,6 +22,7 @@ interface CloudSyncModalProps {
   shiftCount: number;
   incidentCount: number;
   evidenceCount: number;
+  isDemoMode?: boolean;
   onSyncComplete?: (result: { shifts: number; incidents: number; evidence: number }) => void;
 }
 
@@ -33,6 +34,7 @@ export function CloudSyncModal({
   shiftCount,
   incidentCount,
   evidenceCount,
+  isDemoMode = false,
   onSyncComplete,
 }: CloudSyncModalProps) {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -43,6 +45,11 @@ export function CloudSyncModal({
   if (!isOpen) return null;
 
   async function handleTriggerSync() {
+    if (isDemoMode) {
+      setSyncStatus("error");
+      setStatusMessage("Demo records stay on this device and cannot be uploaded.");
+      return;
+    }
     setIsSyncing(true);
     setSyncStatus("idle");
     setStatusMessage("Synchronizing encrypted records with Supabase...");
@@ -98,15 +105,15 @@ export function CloudSyncModal({
           </div>
           <div>
             <h2 id="cloud-sync-title" className="text-lg font-bold text-gray-900 leading-tight">
-              Cloud Backup & Sync
+              Encrypted Cloud Backup
             </h2>
             <p className="text-xs text-gray-500">
-              Supabase PostgreSQL · Zero-Knowledge Storage
+              Supabase PostgreSQL · Optional encrypted backup
             </p>
           </div>
         </div>
 
-        {/* Zero-Knowledge Security Badge */}
+        {/* Encryption status */}
         <div
           className={`p-3.5 rounded-2xl mb-4 border flex items-start gap-3 ${
             isVaultConfigured
@@ -121,12 +128,12 @@ export function CloudSyncModal({
           )}
           <div className="text-xs">
             <strong className="font-semibold block mb-0.5">
-              {isVaultConfigured ? "Zero-Knowledge Encryption Active" : "Standard Sync Mode"}
+              {isVaultConfigured ? "Client-side encryption active" : "Standard backup mode"}
             </strong>
             <p className="leading-relaxed text-gray-600">
               {isVaultConfigured
                 ? "Sensitive wages, employer names, and dispute notes are encrypted on-device with AES-GCM-256 before upload. Supabase stores only ciphertext."
-                : "Records will be synced with Supabase Row Level Security. You can set a Vault PIN anytime to enable client-side zero-knowledge encryption."}
+                : "Records will use Supabase Row Level Security. Set a Vault PIN before backup to encrypt sensitive record content on this device."}
             </p>
           </div>
         </div>
@@ -181,7 +188,7 @@ export function CloudSyncModal({
             variant="iosPlain"
             onClick={onClose}
             className="flex-1 rounded-2xl h-11 text-gray-600"
-            disabled={isSyncing}
+            disabled={isSyncing || isDemoMode}
           >
             Close
           </Button>
@@ -200,7 +207,7 @@ export function CloudSyncModal({
             ) : (
               <>
                 <Cloud size={16} />
-                <span>Sync to Supabase</span>
+                <span>{isDemoMode ? "Demo upload disabled" : "Upload backup"}</span>
               </>
             )}
           </Button>

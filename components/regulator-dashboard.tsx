@@ -106,7 +106,7 @@ export function RegulatorDashboard({ onBack }: RegulatorDashboardProps) {
             Kenya Labour Rights Regional Monitor
           </h2>
           <p className="text-xs text-slate-300 mt-1 max-w-lg leading-relaxed">
-            Aggregated violation telemetry for Sub-County Labour Officers, KNCHR, and COTU-K. Worker identities remain sealed in device-side zero-knowledge vaults.
+            Illustrative regional patterns for discussion. A production dashboard would require informed consent, data minimisation, and a verified privacy review.
           </p>
 
           <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-slate-700/60">
@@ -216,7 +216,7 @@ export function RegulatorDashboard({ onBack }: RegulatorDashboardProps) {
       <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-200/80 text-[11px] text-gray-500 leading-relaxed flex items-start gap-2">
         <ShieldCheck size={16} className="text-gray-400 shrink-0 mt-0.5" />
         <div>
-          <strong>Differential Privacy Guarantee:</strong> Regional telemetry aggregates records only when minimum anonymity thresholds are satisfied. No employer or site name is published without multi-worker corroboration.
+          <strong>Illustrative privacy threshold:</strong> This sample view shows the intended minimum-count rule. Production use requires a consented dataset, privacy review, and verified aggregation pipeline.
         </div>
       </div>
     </div>

@@ -1,0 +1,10 @@
+{
+  "name": "Fairwork Pulse",
+  "short_name": "Fairwork",
+  "description": "A private work record and evidence wallet for Kenyan workers.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f1ed",
+  "theme_color": "#f3f1ed",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

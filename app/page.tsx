@@ -82,6 +82,7 @@ import { FeaturePhoneModal } from "@/components/feature-phone-modal";
 import { CloudSyncModal } from "@/components/cloud-sync-modal";
 import { ImageViewerModal } from "@/components/image-viewer-modal";
 import { WorkerProfileModal } from "@/components/worker-profile-modal";
+import { HakiDossier } from "@/components/haki-dossier";
 
 const copy = {
   en: {
@@ -105,8 +106,8 @@ const copy = {
     total: "Total indicated claim",
     recent: "Recent records",
     viewAll: "View ledger",
-    private: "Zero-Knowledge Vault",
-    privateText: "Sensitive pay & incident notes are encrypted on-device with AES-GCM-256. Nothing unencrypted leaves this browser.",
+    private: "Encrypted device vault",
+    privateText: "With a PIN, sensitive pay and incident content is encrypted on this device before optional cloud backup.",
     incidentTitle: "Record what happened",
     incidentText: "Capture an injury, dismissal, wage withholding, or maternity discrimination while details are fresh.",
     startIncident: "Start incident record",
@@ -180,6 +181,9 @@ export default function HomePage() {
   const [active, setActive] = useState("home");
   const [savedPulse, setSavedPulse] = useState(false);
   const [toastMessage, setToastMessage] = useState("Shift saved to your device");
+  const [isOnline, setIsOnline] = useState(true);
+  const [isSavingShift, setIsSavingShift] = useState(false);
+  const [isSavingIncident, setIsSavingIncident] = useState(false);
 
   // Mode state: 'demo' (Amina M. pre-filled) vs 'clean' (Personal profile)
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
@@ -247,12 +251,12 @@ export default function HomePage() {
   );
 
   // Worker display initials
-  const workerInitials = useMemo(() => {
+  const workerInitials = (() => {
     if (!workerProfile?.name) return "FP";
     const parts = workerProfile.name.trim().split(/\s+/);
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  }, [workerProfile?.name]);
+  })();
 
   // Hydrate Data on Mount
   useEffect(() => {
@@ -400,6 +404,17 @@ export default function HomePage() {
       showToast("Switched to Sample Demo (Amina M. pre-filled)");
     }
   };
+
+  useEffect(() => {
+    const updateConnection = () => setIsOnline(navigator.onLine);
+    updateConnection();
+    window.addEventListener("online", updateConnection);
+    window.addEventListener("offline", updateConnection);
+    return () => {
+      window.removeEventListener("online", updateConnection);
+      window.removeEventListener("offline", updateConnection);
+    };
+  }, []);
 
   function navigate(id: string) {
     setActive(id);
@@ -638,7 +653,10 @@ export default function HomePage() {
   // Save Shift Record
   async function submitShift(e: FormEvent) {
     e.preventDefault();
+    if (isSavingShift) return;
+    setIsSavingShift(true);
 
+    try {
     const shiftId = Date.now();
     const evidenceIds = shiftAttachedEvidence.map((ev) => ev.id);
 
@@ -686,9 +704,9 @@ export default function HomePage() {
     };
 
     // Update in-memory state & persist to IndexedDB
+    await saveShift(persisted);
     const updated = [next, ...shifts];
     setShifts(updated);
-    await saveShift(persisted);
 
     // Save only masked records to localStorage
     const allDbShifts = await getAllShifts();
@@ -697,13 +715,20 @@ export default function HomePage() {
     // Clear attached evidence for this shift
     setShiftAttachedEvidence([]);
     showToast("Shift & payment proof saved to your device");
+    } catch {
+      showToast("Shift was not saved. Check device storage and try again.");
+    } finally {
+      setIsSavingShift(false);
+    }
   }
 
   // Save Incident Record
   async function submitIncident(e: FormEvent) {
     e.preventDefault();
-    if (!incidentType) return;
+    if (!incidentType || isSavingIncident) return;
+    setIsSavingIncident(true);
 
+    try {
     const incidentId = Date.now();
     const evidenceIds = incidentAttachedEvidence.map((ev) => ev.id);
 
@@ -740,14 +765,19 @@ export default function HomePage() {
       location: isEncrypted ? "[ENCRYPTED]" : undefined,
     };
 
+    await saveIncident(persistedIncident);
     const updated = [nextIncident, ...incidents];
     setIncidents(updated);
-    await saveIncident(persistedIncident);
 
     setIncidentType("");
     setIncidentDescription("");
     setIncidentAttachedEvidence([]);
     showToast("Incident & evidence saved privately in vault");
+    } catch {
+      showToast("Incident was not saved. Check device storage and try again.");
+    } finally {
+      setIsSavingIncident(false);
+    }
   }
 
   // Total Owed across all stored shifts
@@ -823,6 +853,9 @@ export default function HomePage() {
         </button>
 
         <div className="header-actions">
+          <span className={`connection-chip ${isOnline ? "online" : "offline"}`} role="status">
+            <i /> {isOnline ? "Online" : "Offline · saves on device"}
+          </span>
           {/* Mode Switcher: Sample Demo vs Clean Profile */}
           <button
             type="button"
@@ -1232,8 +1265,8 @@ export default function HomePage() {
                         <Camera /> Add photo or medical receipt
                       </Button>
 
-                      <Button type="submit" variant="iosPrimary">
-                        Save incident to encrypted vault
+                      <Button type="submit" variant="iosPrimary" disabled={isSavingIncident}>
+                        {isSavingIncident ? "Saving incident…" : "Save incident to encrypted vault"}
                       </Button>
                     </form>
                   )}
@@ -1286,6 +1319,15 @@ export default function HomePage() {
                     </span>
                   </div>
 
+                  <HakiDossier
+                    shifts={shifts}
+                    incidents={incidents}
+                    evidence={evidenceList}
+                    profile={workerProfile}
+                    isDemoMode={isDemoMode}
+                    onOpenEvidence={setSelectedAttachmentForViewer}
+                  />
+                  <div className="legacy-dossier-content" hidden>
                   <article className="dossier-preview">
                     <header>
                       <div className="dossier-logo">
@@ -1394,21 +1436,22 @@ export default function HomePage() {
                     )}
 
                     <p>
-                      Calculations are generated contemporaneously in accordance with the Employment Act
-                      2007 and the Regulation of Wages (General) Order. Admissible for conciliation before
-                      Sub-County Labour Officers or trade union representatives.
+                      Calculations organize worker-entered information using cited rules. Review the current
+                      wage order, occupation, location, and available remedy with a qualified adviser.
                     </p>
                   </article>
 
                   <Button variant="iosPrimary" className="screen-action" onClick={() => window.print()}>
                     <Download /> Export & Print Haki Dossier (PDF)
                   </Button>
+                  </div>
                   <Button
                     variant="iosTinted"
                     className="screen-action mt-2 text-emerald-800 bg-emerald-100/70 hover:bg-emerald-200/70"
                     onClick={() => setIsSyncModalOpen(true)}
+                    disabled={isDemoMode}
                   >
-                    <Cloud /> Backup Dossier to Cloud (Supabase)
+                    <Cloud /> {isDemoMode ? "Demo backup disabled" : "Upload encrypted backup"}
                   </Button>
                   <Button
                     variant="iosPlain"
@@ -1445,7 +1488,7 @@ export default function HomePage() {
             <div className="pulse-card-top">
               <span>
                 <ShieldCheck size={16} />{" "}
-                {isVaultConfigured ? "Zero-Knowledge Encrypted" : "Private device ledger"}
+                {isVaultConfigured ? "Client-side encrypted" : "Private device ledger"}
               </span>
               <strong className="tracking-wider">FAIRWORK</strong>
             </div>
@@ -1662,8 +1705,10 @@ export default function HomePage() {
                 </span>
                 {t.rest} (Double Time 2.0×)
               </label>
-              <Button variant="iosPrimary" className="save-button" type="submit">
-                {savedPulse ? (
+              <Button variant="iosPrimary" className="save-button" type="submit" disabled={isSavingShift}>
+                {isSavingShift ? (
+                  <>Saving…</>
+                ) : savedPulse ? (
                   <>
                     <Check size={20} /> Saved
                   </>
@@ -1953,6 +1998,7 @@ export default function HomePage() {
         shiftCount={shifts.length}
         incidentCount={incidents.length}
         evidenceCount={evidenceList.length}
+        isDemoMode={isDemoMode}
         onSyncComplete={(res) => {
           showToast(`Backed up ${res.shifts} shifts, ${res.incidents} incidents to Supabase`);
         }}
