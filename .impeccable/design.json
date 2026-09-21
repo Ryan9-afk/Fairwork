@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-21T08:30:00Z",
+  "title": "Design System: Fairwork Pulse",
+  "extensions": {
+    "colorMeta": {
+      "ink": { "role": "primary", "displayName": "Work Ink", "canonical": "#171817", "tonalRamp": ["#121312", "#242624", "#3a3d3a", "#565a56", "#767b76", "#9da19d", "#c7c9c7", "#f0f1f0"] },
+      "warm-ground": { "role": "neutral", "displayName": "Warm Ground", "canonical": "#f3f1ed", "tonalRamp": ["#2a2825", "#494641", "#6d6962", "#938e85", "#b5b0a8", "#d2cec8", "#e7e3de", "#f7f5f2"] },
+      "signal-yellow": { "role": "accent", "displayName": "Signal Yellow", "canonical": "#ffd428", "tonalRamp": ["#342900", "#5f4b00", "#896d00", "#b89200", "#dbae00", "#ffd428", "#ffe779", "#fff6c7"] },
+      "protective-mint": { "role": "support", "displayName": "Protective Mint", "canonical": "#ccefd5", "tonalRamp": ["#12371e", "#245c34", "#3c8150", "#64a672", "#8bc798", "#afe1ba", "#d3f0da", "#eff9f2"] },
+      "action-blue": { "role": "action", "displayName": "Action Blue", "canonical": "#0a72f5", "tonalRamp": ["#001b43", "#003777", "#0053aa", "#0a72f5", "#4c96fb", "#85b9ff", "#bed9ff", "#edf5ff"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Compact Native Display", "purpose": "Page titles and primary amounts." },
+      "body": { "displayName": "Mobile Body", "purpose": "Instructions, form labels, and record detail." },
+      "label": { "displayName": "Control Label", "purpose": "Actions and compact metadata." }
+    },
+    "shadows": [
+      { "name": "ambient-surface", "value": "0 18px 45px rgb(32 34 31 / 7%)", "purpose": "Major summary surfaces." },
+      { "name": "quiet-group", "value": "0 13px 38px rgb(31 33 30 / 6%)", "purpose": "Forms and grouped controls." },
+      { "name": "floating-dock", "value": "0 16px 45px rgb(28 30 27 / 18%)", "purpose": "Persistent mobile navigation." }
+    ],
+    "motion": [
+      { "name": "toggle", "value": "220ms ease", "purpose": "Switch thumb and selected-state transitions." },
+      { "name": "toast", "value": "380ms cubic-bezier(.2,.8,.2,1)", "purpose": "Device-save confirmation." }
+    ],
+    "breakpoints": [
+      { "name": "phone", "value": "560px" },
+      { "name": "tablet", "value": "850px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "High-confidence save and completion action.",
+      "html": "<button class=\"ds-primary\">Save shift record</button>",
+      "css": ".ds-primary{min-height:48px;padding:0 20px;border:0;border-radius:999px;background:#171817;color:#fff;font:700 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}.ds-primary:hover{background:#30332f}.ds-primary:focus-visible{outline:3px solid rgb(10 114 245 / 28%);outline-offset:2px}"
+    },
+    {
+      "name": "Quick Action",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Pill action used immediately below the evidence summary.",
+      "html": "<button class=\"ds-quick\">Report incident</button>",
+      "css": ".ds-quick{height:58px;padding:0 20px;border:0;border-radius:999px;background:#fff;color:#171817;box-shadow:0 10px 28px rgb(31 33 30 / 6%);font:650 13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}.ds-quick:hover{background:#fafaf8}.ds-quick:focus-visible{outline:3px solid rgb(10 114 245 / 28%);outline-offset:2px}"
+    },
+    {
+      "name": "Evidence Summary",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Wallet-like home anchor for the current indicated amount and record status.",
+      "html": "<article class=\"ds-summary\"><small>Indicated amount due</small><strong>KSh 1,163</strong><span>3 shift records</span></article>",
+      "css": ".ds-summary{display:grid;gap:14px;padding:26px;border-radius:27px;background:#fff;color:#171817;box-shadow:0 18px 45px rgb(32 34 31 / 7%);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}.ds-summary small,.ds-summary span{color:#7d817e}.ds-summary strong{font-size:38px;font-weight:550;letter-spacing:-.04em}"
+    },
+    {
+      "name": "Grouped Field",
+      "kind": "input",
+      "refersTo": "grouped-field",
+      "description": "Label-left, value-right field for rapid end-of-shift entry.",
+      "html": "<label class=\"ds-field\"><span>Agreed pay</span><input value=\"KSh 1200\" aria-label=\"Agreed pay\"></label>",
+      "css": ".ds-field{min-height:52px;display:grid;grid-template-columns:42% 1fr;align-items:center;border-bottom:1px solid #e8e7e3;color:#171817;font:500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}.ds-field input{min-width:0;border:0;background:transparent;color:#3a3a3c;text-align:right;font:inherit}.ds-field input:focus-visible{outline:3px solid rgb(10 114 245 / 28%);outline-offset:2px}"
+    },
+    {
+      "name": "Floating Navigation",
+      "kind": "nav",
+      "refersTo": "mobile-nav",
+      "description": "Five-position mobile dock with a raised central capture action.",
+      "html": "<nav class=\"ds-nav\"><button>Home</button><button>Records</button><button class=\"ds-capture\">+</button><button>Incidents</button><button>Dossier</button></nav>",
+      "css": ".ds-nav{display:grid;grid-template-columns:repeat(5,1fr);align-items:center;padding:8px;border-radius:26px;background:#fff;box-shadow:0 16px 45px rgb(28 30 27 / 18%)}.ds-nav button{min-height:44px;border:0;background:transparent;color:#7d817e;font:500 10px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}.ds-nav .ds-capture{width:48px;height:48px;justify-self:center;border-radius:50%;background:#ffd428;color:#171817;font-size:24px}.ds-nav button:focus-visible{outline:3px solid rgb(10 114 245 / 28%);outline-offset:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Pocket Evidence Wallet",
+    "overview": "A trusted personal instrument carried at the end of a working day: quiet, protective, and immediately legible. Warm neutral ground and crisp working surfaces keep legal and financial evidence approachable without making risk feel casual.",
+    "keyCharacteristics": ["Warm ground with crisp working surfaces", "One prominent evidence summary", "Native-feeling controls and floating dock", "Purposeful yellow, mint, blue, and red signals"],
+    "rules": [
+      { "name": "Signal Economy", "body": "Bright color must communicate action or state; it is never ambient decoration.", "section": "colors" },
+      { "name": "Numeric Clarity", "body": "Monetary values use tabular numerals and tighter tracking than supporting copy.", "section": "typography" },
+      { "name": "One Plane", "body": "A component gets either a separator or elevation at its outer edge, never both.", "section": "elevation" }
+    ],
+    "dos": ["Do make the worker's current amount, record status, and next action visible in the first viewport.", "Do maintain 44px or larger interactive targets and visible keyboard focus.", "Do use Lucide icons consistently and pair unfamiliar symbols with labels.", "Do let Kiswahili and English labels expand without overlap."],
+    "donts": ["Don't use banking logos, card-network branding, or proprietary Apple interface assets.", "Don't decorate every card with a different color; signal colors must retain meaning.", "Don't stack cards inside cards when grouped rows can communicate the structure.", "Don't use glass effects away from the navigation dock or other genuinely floating chrome."]
+  }
+}

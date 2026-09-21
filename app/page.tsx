@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowLeft, ArrowRight, Baby, Banknote, BriefcaseBusiness, CalendarDays, Camera, Check, ChevronRight, Download, FileCheck2, FileText, FolderLock, HeartPulse, Home, Languages, MapPin, Plus, ReceiptText, Scale, ShieldCheck, UserRound } from "lucide-react";
+import { AlertTriangle, ArrowDownLeft, ArrowLeft, ArrowRight, ArrowUpRight, Baby, Banknote, Bell, BriefcaseBusiness, CalendarDays, Camera, Check, ChevronRight, Download, Eye, FileCheck2, FileText, FolderLock, HeartPulse, Home, Languages, MapPin, Plus, ReceiptText, Scale, ShieldCheck, UserRound } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -34,11 +34,12 @@ export default function HomePage() {
   function submit(e: FormEvent) { e.preventDefault(); const next: Shift = { id: Date.now(), date: form.date, employer: form.employer || "Employer not named", location: form.location || "Site not named", start: form.start, end: form.end, agreed: Number(form.agreed), paid: Number(form.paid), sunday: form.sunday }; const updated = [next, ...shifts]; setShifts(updated); window.localStorage.setItem("fairwork-pulse-shifts", JSON.stringify(updated)); showToast("Shift saved to your device") }
   const totalOwed = shifts.reduce((sum, shift) => sum + audit(shift.agreed, shift.paid, shift.start, shift.end, shift.sunday).total, 0);
   const nav = [["home", Home, t.log], ["records", ReceiptText, t.records], ["incidents", HeartPulse, t.incidents], ["dossier", FolderLock, t.dossier]] as const;
+  const mobileNav = [["home", Home, "Home"], ["records", ReceiptText, t.records], ["quick-log", Plus, t.log], ["incidents", HeartPulse, t.incidents], ["dossier", FolderLock, t.dossier]] as const;
 
   return <main className="app-shell">
     <header className="topbar">
-      <a className="brand" href="#top" aria-label="Fairwork Pulse home"><span className="brand-mark"><Check size={18} strokeWidth={3} /></span><span>Fairwork <b>Pulse</b></span></a>
-      <div className="header-actions"><div className="device-status"><ShieldCheck size={17} /><span>{t.saved}</span></div><Button variant="iosTinted" size="iosIcon" className="language" onClick={() => setLang(lang === "en" ? "sw" : "en")} aria-label="Change language"><Languages size={18} /><span>{lang === "en" ? "Kiswahili" : "English"}</span></Button><Button variant="iosTinted" size="iosIcon" className="avatar" aria-label="Worker profile"><UserRound size={20} /></Button></div>
+      <button className="profile-greeting" type="button" aria-label="Worker profile"><span className="profile-photo">AM</span><span><small>Welcome back,</small><strong>Amina M.</strong></span></button>
+      <div className="header-actions"><div className="device-status"><ShieldCheck size={17} /><span>{t.saved}</span></div><Button variant="iosTinted" size="iosIcon" className="language" onClick={() => setLang(lang === "en" ? "sw" : "en")} aria-label="Change language"><Languages size={18} /><span>{lang === "en" ? "Kiswahili" : "English"}</span></Button><Button variant="iosTinted" size="iosIcon" className="notification" aria-label="Notifications"><Bell size={19} /><i /></Button></div>
     </header>
     <div className="desktop-grid" id="top">
       <aside className="side-nav" aria-label="Primary navigation">
@@ -54,6 +55,17 @@ export default function HomePage() {
           {active === "dossier" && <><div className="secondary-title"><div><h1>{t.dossier}</h1><p>Your evidence, calculations, and next steps in one reviewable package.</p></div><span className="ready-badge"><Check />Ready</span></div><article className="dossier-preview"><header><div className="dossier-logo"><Scale /></div><div><strong>Fairwork Pulse</strong><span>Haki Dossier · Preview</span></div></header><div className="dossier-person"><span>Complainant</span><b>Amina M. · Construction worker</b><small>Nairobi · 14–18 September 2026</small></div><div className="dossier-total"><span>Indicative amount outstanding</span><strong>{money(totalOwed)}</strong><small>Wage deficit plus calculated overtime</small></div><ul><li><span>Work records</span><b>{shifts.length} attached</b></li><li><span>Evidence files</span><b>3 indexed</b></li><li><span>Legal references</span><b>Employment Act + WIBA</b></li></ul><p>Demo calculations require review against the applicable wage order and contract terms.</p></article><Button variant="iosPrimary" className="screen-action" onClick={() => window.print()}><Download />Open print / PDF</Button><Button variant="iosPlain" className="source-link" onClick={() => showToast("Sources are documented in the project register")}><FileText />Citation register included</Button></>}
         </section>}
         <div className="page-heading"><div><h1>{t.hello}</h1><p>{t.intro}</p></div><div className="date-chip"><CalendarDays size={18} /><span>Sun, 20 Sep</span></div></div>
+        <section className="pulse-card" aria-label="Work record summary">
+          <div className="pulse-card-top"><span><ShieldCheck size={16} /> Private device ledger</span><strong>FAIRWORK</strong></div>
+          <p>Indicated amount due</p>
+          <div className="pulse-balance"><strong>{money(totalOwed)}</strong><Eye size={21} /></div>
+          <div className="pulse-card-meta"><span>SHIFT RECORDS<b>{shifts.length}</b></span><span>STATUS<b>{totalOwed > 0 ? "Action needed" : "Up to date"}</b></span></div>
+        </section>
+        <div className="quick-actions" aria-label="Quick actions">
+          <Button type="button" variant="iosPlain" onClick={() => navigate("incidents")}><span><ArrowDownLeft /></span>Report incident</Button>
+          <Button type="button" variant="iosPlain" onClick={() => navigate("dossier")}><span><ArrowUpRight /></span>Build dossier</Button>
+          <Button type="button" variant="iosPlain" className="quick-add" onClick={() => document.querySelector(".shift-form")?.scrollIntoView({ behavior: "smooth" })} aria-label="Log a shift"><Plus /></Button>
+        </div>
         <form className="shift-form" onSubmit={submit}>
           <div className="form-title"><div className="title-icon"><BriefcaseBusiness size={23} /></div><div><h2>{t.log}</h2><p>About 30 seconds · works offline</p></div><span className="form-step">NEW RECORD</span></div>
           <div className="fields">
@@ -85,7 +97,7 @@ export default function HomePage() {
         <p className="legal-note"><ShieldCheck size={16} /> Calculations are guidance, not legal advice. A labour officer can review your dossier.</p>
       </aside>
     </div>
-    <nav className="mobile-nav" aria-label="Mobile navigation">{nav.map(([id, Icon, label]) => <Button type="button" variant="iosPlain" key={id} className={active === id ? "active" : ""} aria-current={active === id ? "page" : undefined} onClick={() => navigate(id)}><Icon size={21} /><span>{label}</span></Button>)}</nav>
+    <nav className="mobile-nav" aria-label="Mobile navigation">{mobileNav.map(([id, Icon, label]) => <Button type="button" variant="iosPlain" key={id} className={`${active === id ? "active" : ""} ${id === "quick-log" ? "nav-primary" : ""}`} aria-current={active === id ? "page" : undefined} onClick={() => { if (id === "quick-log") { navigate("home"); window.setTimeout(() => document.querySelector(".shift-form")?.scrollIntoView({ behavior: "smooth" }), 30) } else navigate(id) }}><span className="nav-icon"><Icon size={id === "quick-log" ? 25 : 21} /></span><span>{label}</span></Button>)}</nav>
     <div className={savedPulse ? "toast show" : "toast"}><Check size={18} /><span>{toastMessage}</span></div>
   </main>
 }
