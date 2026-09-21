@@ -5,7 +5,7 @@
  * with SHA-256 chain-of-custody tracking.
  */
 
-import { computeSha256 } from "./crypto";
+import { computeSha256, encryptString, decryptString } from "./crypto";
 
 export interface EvidenceAttachment {
   id: string;
@@ -14,11 +14,13 @@ export interface EvidenceAttachment {
   fileName: string;
   fileSize: number;
   mimeType: string;
-  dataUrl: string; // Base64 data URL for instant rendering & offline retention
+  dataUrl: string; // Base64 data URL for instant rendering (empty if stored encrypted in vault)
   sha256Hash: string;
   createdAt: string;
   paymentType?: "mpesa" | "cash_receipt" | "bank" | "general";
   notes?: string;
+  isEncrypted?: boolean;
+  ciphertextPayload?: { ciphertext: string; iv: string };
 }
 
 export interface StoredShift {
@@ -200,7 +202,8 @@ export async function saveEvidenceAttachment(
   file: File,
   parentType: "shift" | "incident",
   parentId?: number | string,
-  notes?: string
+  notes?: string,
+  vaultKey?: CryptoKey | null
 ): Promise<EvidenceAttachment> {
   const arrayBuffer = await file.arrayBuffer();
   const sha256Hash = await computeSha256(arrayBuffer);
@@ -223,6 +226,16 @@ export async function saveEvidenceAttachment(
     paymentType = "bank";
   }
 
+  let ciphertextPayload: { ciphertext: string; iv: string } | undefined = undefined;
+  let isEncrypted = false;
+  let storedDataUrl = dataUrl;
+
+  if (vaultKey) {
+    ciphertextPayload = await encryptString(dataUrl, vaultKey);
+    isEncrypted = true;
+    storedDataUrl = ""; // Purge plaintext dataUrl from persistent IndexedDB
+  }
+
   const attachment: EvidenceAttachment = {
     id: `ev_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     parentId,
@@ -230,11 +243,13 @@ export async function saveEvidenceAttachment(
     fileName: file.name,
     fileSize: file.size,
     mimeType: file.type || "image/jpeg",
-    dataUrl,
+    dataUrl: storedDataUrl,
     sha256Hash,
     createdAt: new Date().toISOString(),
     paymentType,
     notes,
+    isEncrypted,
+    ciphertextPayload,
   };
 
   const db = await openDatabase();
@@ -246,7 +261,29 @@ export async function saveEvidenceAttachment(
     req.onerror = () => reject(req.error);
   });
 
-  return attachment;
+  // Return in-memory instance with active dataUrl for immediate React rendering
+  return { ...attachment, dataUrl };
+}
+
+export async function decryptEvidenceAttachment(
+  attachment: EvidenceAttachment,
+  key: CryptoKey
+): Promise<string> {
+  if (!attachment.isEncrypted || !attachment.ciphertextPayload) {
+    return attachment.dataUrl;
+  }
+  return decryptString(attachment.ciphertextPayload, key);
+}
+
+export async function updateEvidenceAttachment(attachment: EvidenceAttachment): Promise<void> {
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("evidence", "readwrite");
+    const store = tx.objectStore("evidence");
+    const req = store.put(attachment);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
 }
 
 export async function getEvidenceForParent(

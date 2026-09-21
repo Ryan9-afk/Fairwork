@@ -97,6 +97,14 @@ export function ImageViewerModal({
               alt={attachment.fileName}
               className="max-h-72 w-auto max-w-full object-contain"
             />
+          ) : attachment.isEncrypted && !attachment.dataUrl ? (
+            <div className="text-center p-6 text-amber-200">
+              <ShieldCheck size={44} className="mx-auto mb-2 text-amber-400 animate-pulse" />
+              <span className="text-xs font-bold block text-white">Zero-Knowledge Encrypted</span>
+              <span className="text-[11px] text-amber-300/80 max-w-xs block mx-auto mt-1">
+                This evidence is encrypted with your master PIN (AES-GCM-256). Unlock the vault to preview.
+              </span>
+            </div>
           ) : (
             <div className="text-center p-6 text-gray-300">
               <FileText size={48} className="mx-auto mb-2 text-gray-400" />

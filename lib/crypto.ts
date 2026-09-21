@@ -121,6 +121,105 @@ export async function decryptData<T>(
 }
 
 /**
+ * Encrypts a raw string (e.g. data URL) with AES-GCM.
+ */
+export async function encryptString(
+  plaintext: string,
+  key: CryptoKey
+): Promise<{ ciphertext: string; iv: string }> {
+  const encoder = new TextEncoder();
+  const plaintextBuffer = encoder.encode(plaintext);
+
+  const iv = new Uint8Array(IV_LENGTH_BYTES);
+  window.crypto.getRandomValues(iv);
+
+  const encryptedBuffer = await window.crypto.subtle.encrypt(
+    {
+      name: "AES-GCM",
+      iv: iv as unknown as BufferSource,
+    },
+    key,
+    plaintextBuffer as unknown as BufferSource
+  );
+
+  return {
+    ciphertext: bufferToBase64(encryptedBuffer),
+    iv: bufferToBase64(iv),
+  };
+}
+
+/**
+ * Decrypts an AES-GCM ciphertext payload back into a string.
+ */
+export async function decryptString(
+  payload: { ciphertext: string; iv: string },
+  key: CryptoKey
+): Promise<string> {
+  const ciphertextBuffer = base64ToBuffer(payload.ciphertext);
+  const iv = base64ToBuffer(payload.iv);
+
+  const decryptedBuffer = await window.crypto.subtle.decrypt(
+    {
+      name: "AES-GCM",
+      iv: iv as unknown as BufferSource,
+    },
+    key,
+    ciphertextBuffer as unknown as BufferSource
+  );
+
+  const decoder = new TextDecoder();
+  return decoder.decode(decryptedBuffer);
+}
+
+/**
+ * Encrypts arbitrary binary data (Uint8Array or ArrayBuffer) with AES-GCM.
+ */
+export async function encryptBinary(
+  data: Uint8Array | ArrayBuffer,
+  key: CryptoKey
+): Promise<{ ciphertext: string; iv: string }> {
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  const iv = new Uint8Array(IV_LENGTH_BYTES);
+  window.crypto.getRandomValues(iv);
+
+  const encryptedBuffer = await window.crypto.subtle.encrypt(
+    {
+      name: "AES-GCM",
+      iv: iv as unknown as BufferSource,
+    },
+    key,
+    bytes as unknown as BufferSource
+  );
+
+  return {
+    ciphertext: bufferToBase64(encryptedBuffer),
+    iv: bufferToBase64(iv),
+  };
+}
+
+/**
+ * Decrypts an AES-GCM ciphertext payload back into raw binary bytes.
+ */
+export async function decryptBinary(
+  payload: { ciphertext: string; iv: string },
+  key: CryptoKey
+): Promise<Uint8Array> {
+  const ciphertextBuffer = base64ToBuffer(payload.ciphertext);
+  const iv = base64ToBuffer(payload.iv);
+
+  const decryptedBuffer = await window.crypto.subtle.decrypt(
+    {
+      name: "AES-GCM",
+      iv: iv as unknown as BufferSource,
+    },
+    key,
+    ciphertextBuffer as unknown as BufferSource
+  );
+
+  return new Uint8Array(decryptedBuffer);
+}
+
+/**
  * Computes a standard SHA-256 checksum (hex formatted) for audit trails and file integrity.
  */
 export async function computeSha256(

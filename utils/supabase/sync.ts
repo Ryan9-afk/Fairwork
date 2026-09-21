@@ -2,11 +2,12 @@
  * Zero-Knowledge Supabase Synchronization Engine for Fairwork Pulse.
  * Synchronizes local IndexedDB shifts, incidents, and evidence records with Supabase PostgreSQL.
  * If zero-knowledge encryption is active, only ciphertext and metadata are sent,
- * ensuring the server never holds unencrypted wage or incident details.
+ * ensuring the server never holds unencrypted wage, incident, or evidence details.
  */
 
 import { createClient } from "./client";
 import { getAllShifts, getAllIncidents, getAllEvidence } from "@/lib/vault-db";
+import { encryptString } from "@/lib/crypto";
 
 export interface SyncStatus {
   lastSyncTime: string | null;
@@ -15,14 +16,20 @@ export interface SyncStatus {
   error: string | null;
 }
 
-export async function syncVaultToSupabase(): Promise<{
+export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<{
   success: boolean;
   uploadedShifts: number;
   uploadedIncidents: number;
   uploadedEvidence: number;
   userId?: string;
   error?: string;
+  errors?: string[];
 }> {
+  const syncErrors: string[] = [];
+  let uploadedShifts = 0;
+  let uploadedIncidents = 0;
+  let uploadedEvidence = 0;
+
   try {
     const supabase = createClient();
     const { data: { user: initialUser }, error: authError } = await supabase.auth.getUser();
@@ -43,12 +50,12 @@ export async function syncVaultToSupabase(): Promise<{
         uploadedIncidents: 0,
         uploadedEvidence: 0,
         error: "Supabase authentication required. Please sign in or enable anonymous sign-in in Supabase Auth settings.",
+        errors: ["Authentication failed: No user session found."],
       };
     }
 
     // 1. Fetch local shifts from IndexedDB
     const localShifts = await getAllShifts();
-    let uploadedShifts = 0;
 
     for (const shift of localShifts) {
       const payload = {
@@ -72,12 +79,15 @@ export async function syncVaultToSupabase(): Promise<{
         .from("shifts")
         .upsert(payload, { onConflict: "user_id,client_id" });
 
-      if (!error) uploadedShifts++;
+      if (error) {
+        syncErrors.push(`Shift on ${shift.date}: ${error.message}`);
+      } else {
+        uploadedShifts++;
+      }
     }
 
     // 2. Fetch local incidents from IndexedDB
     const localIncidents = await getAllIncidents();
-    let uploadedIncidents = 0;
 
     for (const inc of localIncidents) {
       const payload = {
@@ -97,39 +107,66 @@ export async function syncVaultToSupabase(): Promise<{
         .from("incidents")
         .upsert(payload, { onConflict: "user_id,client_id" });
 
-      if (!error) uploadedIncidents++;
+      if (error) {
+        syncErrors.push(`Incident (${inc.category}): ${error.message}`);
+      } else {
+        uploadedIncidents++;
+      }
     }
 
     // 3. Fetch local evidence attachments from IndexedDB
     const localEvidence = await getAllEvidence();
-    let uploadedEvidence = 0;
 
     for (const ev of localEvidence) {
       let storagePath: string | null = null;
+      const shouldEncrypt = !!(ev.isEncrypted || vaultKey);
 
-      // If binary image dataUrl is present, upload to Supabase Storage bucket
-      if (ev.dataUrl && ev.dataUrl.startsWith("data:")) {
-        try {
-          const extension = ev.fileName.split(".").pop() || "jpg";
-          const path = `${user.id}/${ev.id}.${extension}`;
+      // Determine upload blob:
+      // When zero-knowledge encryption is active (ev.isEncrypted or vaultKey available),
+      // upload the AES-256-GCM ciphertext payload, NEVER the raw image blob.
+      try {
+        let uploadBlob: Blob | null = null;
+        let uploadContentType = ev.mimeType || "image/jpeg";
+        let uploadExtension = ev.fileName.split(".").pop() || "bin";
 
-          // Convert dataURL to Blob
+        if (ev.isEncrypted && ev.ciphertextPayload) {
+          // Upload ciphertext payload as JSON blob
+          uploadBlob = new Blob([JSON.stringify(ev.ciphertextPayload)], {
+            type: "application/json; charset=utf-8",
+          });
+          uploadContentType = "application/json";
+          uploadExtension = "enc.json";
+        } else if (vaultKey && ev.dataUrl && ev.dataUrl.startsWith("data:")) {
+          // Encrypt raw data on client before sending to cloud
+          const encrypted = await encryptString(ev.dataUrl, vaultKey);
+          uploadBlob = new Blob([JSON.stringify(encrypted)], {
+            type: "application/json; charset=utf-8",
+          });
+          uploadContentType = "application/json";
+          uploadExtension = "enc.json";
+        } else if (!shouldEncrypt && ev.dataUrl && ev.dataUrl.startsWith("data:")) {
+          // Plaintext upload only if user has never configured a zero-knowledge vault
           const res = await fetch(ev.dataUrl);
-          const blob = await res.blob();
+          uploadBlob = await res.blob();
+        }
 
+        if (uploadBlob) {
+          const path = `${user.id}/${ev.id}.${uploadExtension}`;
           const { error: storageError } = await supabase.storage
             .from("evidence-vault")
-            .upload(path, blob, {
+            .upload(path, uploadBlob, {
               upsert: true,
-              contentType: ev.mimeType || "image/jpeg",
+              contentType: uploadContentType,
             });
 
-          if (!storageError) {
+          if (storageError) {
+            syncErrors.push(`Evidence storage (${ev.fileName}): ${storageError.message}`);
+          } else {
             storagePath = path;
           }
-        } catch {
-          // If storage upload fails, still record metadata with cryptographic hash
         }
+      } catch (uploadErr) {
+        syncErrors.push(`Evidence upload (${ev.fileName}): ${String(uploadErr)}`);
       }
 
       const payload = {
@@ -144,30 +181,40 @@ export async function syncVaultToSupabase(): Promise<{
         payment_type: ev.paymentType || null,
         storage_path: storagePath,
         notes: ev.notes || null,
+        is_encrypted: shouldEncrypt,
         created_at: ev.createdAt,
       };
 
-      const { error } = await supabase
+      const { error: dbError } = await supabase
         .from("evidence_files")
         .upsert(payload, { onConflict: "id" });
 
-      if (!error) uploadedEvidence++;
+      if (dbError) {
+        syncErrors.push(`Evidence record (${ev.fileName}): ${dbError.message}`);
+      } else {
+        uploadedEvidence++;
+      }
     }
 
+    const isAllSuccessful = syncErrors.length === 0;
+
     return {
-      success: true,
+      success: isAllSuccessful,
       uploadedShifts,
       uploadedIncidents,
       uploadedEvidence,
       userId: user.id,
+      error: syncErrors.length > 0 ? syncErrors.join("; ") : undefined,
+      errors: syncErrors,
     };
   } catch (err) {
     return {
       success: false,
-      uploadedShifts: 0,
-      uploadedIncidents: 0,
-      uploadedEvidence: 0,
+      uploadedShifts,
+      uploadedIncidents,
+      uploadedEvidence,
       error: String(err),
+      errors: [...syncErrors, String(err)],
     };
   }
 }

@@ -1,5 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// Rate limiting: IP-based sliding window (max 10 requests per 60 seconds per IP)
+interface RateLimitRecord {
+  count: number;
+  resetAt: number;
+}
+
+const rateLimitMap = new Map<string, RateLimitRecord>();
+const RATE_LIMIT_MAX_REQUESTS = 10;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const MAX_MESSAGE_LENGTH = 1000;
+const MAX_CONTENT_LENGTH_BYTES = 10 * 1024; // 10 KB
+
+// Periodic cleanup of stale rate-limit entries (every 5 minutes)
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of rateLimitMap.entries()) {
+    if (now > record.resetAt) {
+      rateLimitMap.delete(ip);
+    }
+  }
+}, 5 * 60 * 1000).unref?.();
+
+function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now();
+  const record = rateLimitMap.get(ip);
+
+  if (!record || now > record.resetAt) {
+    rateLimitMap.set(ip, {
+      count: 1,
+      resetAt: now + RATE_LIMIT_WINDOW_MS,
+    });
+    return { allowed: true };
+  }
+
+  if (record.count >= RATE_LIMIT_MAX_REQUESTS) {
+    const retryAfter = Math.ceil((record.resetAt - now) / 1000);
+    return { allowed: false, retryAfter };
+  }
+
+  record.count += 1;
+  return { allowed: true };
+}
+
 const SYSTEM_INSTRUCTION = `You are the Fairwork Pulse AI Legal Rights Assistant, a calm, protective, and knowledgeable guide for Kenyan casual, informal, and gig workers (e.g., construction workers, domestic staff, tea pickers, boda boda delivery riders).
 
 Your responsibilities:
@@ -14,24 +57,77 @@ Your responsibilities:
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, lang } = (await req.json()) as { message?: string; lang?: string };
+    // 1. Enforce payload size limit
+    const contentLength = req.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > MAX_CONTENT_LENGTH_BYTES) {
+      return NextResponse.json(
+        { error: "Payload exceeds 10KB size limit" },
+        { status: 413 }
+      );
+    }
+
+    // 2. Enforce IP-based rate limiting
+    const forwarded = req.headers.get("x-forwarded-for");
+    const realIp = req.headers.get("x-real-ip");
+    const clientIp = (forwarded ? forwarded.split(",")[0].trim() : null) || realIp || "127.0.0.1";
+
+    const { allowed, retryAfter } = checkRateLimit(clientIp);
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          fallback: true,
+          error: "Too many requests. Please wait a moment before asking again.",
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(retryAfter || 60),
+          },
+        }
+      );
+    }
+
+    // 3. Parse and validate body
+    let body: { message?: unknown; lang?: unknown };
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const { message, lang } = body;
 
     if (!message || typeof message !== "string") {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
 
+    const trimmed = message.trim();
+    if (trimmed.length === 0) {
+      return NextResponse.json({ error: "Message cannot be empty" }, { status: 400 });
+    }
+
+    if (trimmed.length > MAX_MESSAGE_LENGTH) {
+      return NextResponse.json(
+        { error: `Message exceeds maximum permitted limit of ${MAX_MESSAGE_LENGTH} characters` },
+        { status: 400 }
+      );
+    }
+
+    const sanitizedLang = typeof lang === "string" && lang.toLowerCase() === "sw" ? "sw" : "en";
+
+    // 4. Verify API Key
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey || apiKey === "your_gemini_api_key_here") {
       return NextResponse.json({
         fallback: true,
-        message: "No Gemini API key configured on server",
+        message: "Offline statutory mode active",
       });
     }
 
-    // Call Google Gemini API (gemini-2.5-flash or gemini-1.5-flash)
-    const promptText = `User Language: ${lang === "sw" ? "Kiswahili" : "English"}
-User Query: ${message}`;
+    // 5. Call Google Gemini API
+    const promptText = `User Language: ${sanitizedLang === "sw" ? "Kiswahili" : "English"}
+User Query: ${trimmed}`;
 
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
 
@@ -59,12 +155,11 @@ User Query: ${message}`;
     });
 
     if (!response.ok) {
+      // Securely log details on server, NEVER leak raw upstream errors to client
       const errText = await response.text();
-      console.warn("Gemini API call returned non-200:", response.status, errText);
+      console.warn("Gemini upstream API returned non-200 status:", response.status, errText);
       return NextResponse.json({
         fallback: true,
-        status: response.status,
-        details: errText,
       });
     }
 
@@ -87,7 +182,8 @@ User Query: ${message}`;
       ],
     });
   } catch (error) {
-    console.error("Chat API error:", error);
-    return NextResponse.json({ fallback: true, error: String(error) });
+    // Log securely server-side; return sanitized fallback response
+    console.error("Chat API internal error:", error);
+    return NextResponse.json({ fallback: true });
   }
 }

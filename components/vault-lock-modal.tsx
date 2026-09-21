@@ -8,7 +8,9 @@ interface VaultLockModalProps {
   isOpen: boolean;
   onClose: () => void;
   isConfigured: boolean;
+  isLocked?: boolean;
   onUnlock: (pin: string) => Promise<boolean>;
+  onLock?: () => void;
   onSetupPin: (pin: string) => Promise<boolean>;
 }
 
@@ -16,7 +18,9 @@ export function VaultLockModal({
   isOpen,
   onClose,
   isConfigured,
+  isLocked = true,
   onUnlock,
+  onLock,
   onSetupPin,
 }: VaultLockModalProps) {
   const [pin, setPin] = useState("");
@@ -70,19 +74,45 @@ export function VaultLockModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl border border-gray-100 flex flex-col items-center text-center">
-        <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-4 shadow-inner">
-          {isConfigured ? <Lock size={28} /> : <KeyRound size={28} />}
+        <div className={`w-14 h-14 rounded-2xl ${!isLocked ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"} flex items-center justify-center mb-4 shadow-inner`}>
+          {!isLocked ? <Unlock size={28} /> : isConfigured ? <Lock size={28} /> : <KeyRound size={28} />}
         </div>
 
         <h3 className="text-xl font-bold text-gray-900 mb-1">
-          {isConfigured ? "Unlock Encrypted Vault" : "Set Vault Security PIN"}
+          {!isLocked ? "Vault Unlocked" : isConfigured ? "Unlock Encrypted Vault" : "Set Vault Security PIN"}
         </h3>
 
         <p className="text-xs text-gray-500 mb-5 leading-relaxed">
-          {isConfigured
+          {!isLocked
+            ? "Your vault is currently unlocked in memory. You can lock it anytime to purge plaintext records from memory."
+            : isConfigured
             ? "Your wage rates, cash received, and incident notes are encrypted on-device with AES-GCM-256."
             : "Protect sensitive wages and evidence with a local master PIN. Nothing unencrypted ever leaves this device."}
         </p>
+
+        {!isLocked ? (
+          <div className="w-full space-y-3 pt-2">
+            <Button
+              type="button"
+              variant="iosPrimary"
+              className="w-full h-12 bg-amber-600 hover:bg-amber-700 text-white flex items-center justify-center gap-2"
+              onClick={() => {
+                onLock?.();
+                onClose();
+              }}
+            >
+              <Lock size={18} /> Lock Vault Now
+            </Button>
+            <Button
+              type="button"
+              variant="iosPlain"
+              onClick={onClose}
+              className="w-full text-xs text-gray-500"
+            >
+              Close
+            </Button>
+          </div>
+        ) : (
 
         <form onSubmit={handleSubmit} className="w-full space-y-4">
           <div className="space-y-1 text-left">
@@ -159,6 +189,7 @@ export function VaultLockModal({
             </Button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

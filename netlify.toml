@@ -8,6 +8,9 @@
 [build.environment]
   NODE_VERSION = "22"
   NPM_FLAGS = "--legacy-peer-deps"
+  # These values are intentionally public and must be embedded in the browser bundle.
+  # Keep secret scanning enabled for server-only credentials such as GEMINI_API_KEY.
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
 
 # Security and caching headers
 [[headers]]

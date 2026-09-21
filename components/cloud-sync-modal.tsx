@@ -18,6 +18,7 @@ interface CloudSyncModalProps {
   isOpen: boolean;
   onClose: () => void;
   isVaultConfigured: boolean;
+  vaultKey?: CryptoKey | null;
   shiftCount: number;
   incidentCount: number;
   evidenceCount: number;
@@ -28,6 +29,7 @@ export function CloudSyncModal({
   isOpen,
   onClose,
   isVaultConfigured,
+  vaultKey,
   shiftCount,
   incidentCount,
   evidenceCount,
@@ -46,7 +48,7 @@ export function CloudSyncModal({
     setStatusMessage("Synchronizing encrypted records with Supabase...");
 
     try {
-      const result = await syncVaultToSupabase();
+      const result = await syncVaultToSupabase(vaultKey);
 
       if (result.success) {
         setSyncStatus("success");

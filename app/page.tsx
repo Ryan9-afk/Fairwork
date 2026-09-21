@@ -50,6 +50,7 @@ import {
   getAllIncidents,
   saveIncident,
   getAllEvidence,
+  updateEvidenceAttachment,
   getVaultMetadata,
   saveVaultMetadata,
   StoredShift,
@@ -59,6 +60,9 @@ import {
 import {
   deriveKeyFromPin,
   encryptData,
+  decryptData,
+  encryptString,
+  decryptString,
   createVaultVerificationToken,
   verifyVaultKey,
   generateSalt,
@@ -304,6 +308,86 @@ export default function HomePage() {
         createdAt: new Date().toISOString(),
       });
 
+      // Encrypt existing unencrypted shifts in IndexedDB and mask persistent fields
+      const currentShifts = await getAllShifts();
+      const encryptedShifts: StoredShift[] = [];
+      for (const s of currentShifts) {
+        if (!s.isEncrypted) {
+          const ciphertextPayload = await encryptData(
+            {
+              employer: s.employer,
+              location: s.location,
+              agreed: s.agreed,
+              paid: s.paid,
+            },
+            key
+          );
+          const persisted: StoredShift = {
+            ...s,
+            employer: "[ENCRYPTED]",
+            location: "[ENCRYPTED]",
+            agreed: 0,
+            paid: 0,
+            isEncrypted: true,
+            ciphertextPayload,
+          };
+          await saveShift(persisted);
+          encryptedShifts.push({ ...s, isEncrypted: true, ciphertextPayload });
+        } else {
+          encryptedShifts.push(s);
+        }
+      }
+      setShifts(encryptedShifts);
+
+      // Encrypt existing unencrypted incidents in IndexedDB and mask persistent fields
+      const currentIncidents = await getAllIncidents();
+      const encryptedIncidents: StoredIncident[] = [];
+      for (const inc of currentIncidents) {
+        if (!inc.isEncrypted) {
+          const ciphertextPayload = await encryptData(
+            {
+              description: inc.description,
+              employer: inc.employer,
+              location: inc.location,
+              witnesses: inc.witnesses,
+            },
+            key
+          );
+          const persisted: StoredIncident = {
+            ...inc,
+            description: "[ENCRYPTED IN VAULT]",
+            employer: inc.employer ? "[ENCRYPTED]" : undefined,
+            location: inc.location ? "[ENCRYPTED]" : undefined,
+            witnesses: inc.witnesses ? "[ENCRYPTED]" : undefined,
+            isEncrypted: true,
+            ciphertextPayload,
+          };
+          await saveIncident(persisted);
+          encryptedIncidents.push({ ...inc, isEncrypted: true, ciphertextPayload });
+        } else {
+          encryptedIncidents.push(inc);
+        }
+      }
+      setIncidents(encryptedIncidents);
+
+      // Encrypt existing evidence attachments in IndexedDB
+      const currentEvidence = await getAllEvidence();
+      for (const ev of currentEvidence) {
+        if (!ev.isEncrypted && ev.dataUrl) {
+          const encrypted = await encryptString(ev.dataUrl, key);
+          await updateEvidenceAttachment({
+            ...ev,
+            dataUrl: "", // Purge plaintext dataUrl from IndexedDB
+            isEncrypted: true,
+            ciphertextPayload: encrypted,
+          });
+        }
+      }
+
+      // Sync only masked records to localStorage
+      const allDbShifts = await getAllShifts();
+      window.localStorage.setItem("fairwork-pulse-shifts", JSON.stringify(allDbShifts));
+
       setVaultKey(key);
       setIsVaultConfigured(true);
       setIsVaultLocked(false);
@@ -312,6 +396,23 @@ export default function HomePage() {
     } catch {
       return false;
     }
+  }
+
+  async function handleLockVault() {
+    setVaultKey(null);
+    setIsVaultLocked(true);
+
+    // Reload raw masked records from IndexedDB to purge plaintext from React memory
+    const rawShifts = await getAllShifts();
+    setShifts(rawShifts);
+
+    const rawIncidents = await getAllIncidents();
+    setIncidents(rawIncidents);
+
+    const rawEvidence = await getAllEvidence();
+    setEvidenceList(rawEvidence);
+
+    showToast("Vault Locked. Plaintext purged from memory.");
   }
 
   async function handleUnlockVault(pin: string): Promise<boolean> {
@@ -326,6 +427,83 @@ export default function HomePage() {
       if (isValid) {
         setVaultKey(key);
         setIsVaultLocked(false);
+
+        // Decrypt shifts into in-memory state
+        const rawShifts = await getAllShifts();
+        const decryptedShifts: StoredShift[] = [];
+        for (const s of rawShifts) {
+          if (s.isEncrypted && s.ciphertextPayload) {
+            try {
+              const decrypted = await decryptData<{
+                employer: string;
+                location: string;
+                agreed: number;
+                paid: number;
+              }>(s.ciphertextPayload, key);
+              decryptedShifts.push({
+                ...s,
+                employer: decrypted.employer,
+                location: decrypted.location,
+                agreed: decrypted.agreed,
+                paid: decrypted.paid,
+              });
+            } catch {
+              decryptedShifts.push(s);
+            }
+          } else {
+            decryptedShifts.push(s);
+          }
+        }
+        setShifts(decryptedShifts);
+
+        // Decrypt incidents into in-memory state
+        const rawIncidents = await getAllIncidents();
+        const decryptedIncidents: StoredIncident[] = [];
+        for (const inc of rawIncidents) {
+          if (inc.isEncrypted && inc.ciphertextPayload) {
+            try {
+              const decrypted = await decryptData<{
+                description: string;
+                employer?: string;
+                location?: string;
+                witnesses?: string;
+              }>(inc.ciphertextPayload, key);
+              decryptedIncidents.push({
+                ...inc,
+                description: decrypted.description,
+                employer: decrypted.employer ?? inc.employer,
+                location: decrypted.location ?? inc.location,
+                witnesses: decrypted.witnesses ?? inc.witnesses,
+              });
+            } catch {
+              decryptedIncidents.push(inc);
+            }
+          } else {
+            decryptedIncidents.push(inc);
+          }
+        }
+        setIncidents(decryptedIncidents);
+
+        // Decrypt evidence dataUrls into in-memory state for immediate display
+        const rawEvidence = await getAllEvidence();
+        const decryptedEvidence: EvidenceAttachment[] = [];
+        for (const ev of rawEvidence) {
+          if (ev.isEncrypted && ev.ciphertextPayload) {
+            try {
+              const decryptedUrl = await decryptString(ev.ciphertextPayload, key);
+              decryptedEvidence.push({
+                ...ev,
+                dataUrl: decryptedUrl,
+              });
+            } catch {
+              decryptedEvidence.push(ev);
+            }
+          } else {
+            decryptedEvidence.push(ev);
+          }
+        }
+        setEvidenceList(decryptedEvidence);
+
         showToast("Vault Decrypted & Unlocked");
         return true;
       }
@@ -359,6 +537,7 @@ export default function HomePage() {
       isEncrypted = true;
     }
 
+    // In-memory shift representation
     const next: StoredShift = {
       id: shiftId,
       date: form.date,
@@ -375,11 +554,23 @@ export default function HomePage() {
       isEncrypted,
     };
 
-    // Update state & persist to IndexedDB
+    // Stored representation masks sensitive fields when encrypted
+    const persisted: StoredShift = {
+      ...next,
+      employer: isEncrypted ? "[ENCRYPTED]" : next.employer,
+      location: isEncrypted ? "[ENCRYPTED]" : next.location,
+      agreed: isEncrypted ? 0 : next.agreed,
+      paid: isEncrypted ? 0 : next.paid,
+    };
+
+    // Update in-memory state & persist to IndexedDB
     const updated = [next, ...shifts];
     setShifts(updated);
-    await saveShift(next);
-    window.localStorage.setItem("fairwork-pulse-shifts", JSON.stringify(updated));
+    await saveShift(persisted);
+
+    // Save only masked records to localStorage
+    const allDbShifts = await getAllShifts();
+    window.localStorage.setItem("fairwork-pulse-shifts", JSON.stringify(allDbShifts));
 
     // Clear attached evidence for this shift
     setShiftAttachedEvidence([]);
@@ -401,13 +592,15 @@ export default function HomePage() {
       ciphertextPayload = await encryptData(
         {
           description: incidentDescription,
+          employer: form.employer || undefined,
+          location: form.location || undefined,
         },
         vaultKey
       );
       isEncrypted = true;
     }
 
-    const newIncident: StoredIncident = {
+    const nextIncident: StoredIncident = {
       id: incidentId,
       date: incidentDate,
       category: incidentType,
@@ -418,9 +611,16 @@ export default function HomePage() {
       createdAt: new Date().toISOString(),
     };
 
-    const updated = [newIncident, ...incidents];
+    const persistedIncident: StoredIncident = {
+      ...nextIncident,
+      description: isEncrypted ? "[ENCRYPTED IN VAULT]" : incidentDescription,
+      employer: isEncrypted ? "[ENCRYPTED]" : undefined,
+      location: isEncrypted ? "[ENCRYPTED]" : undefined,
+    };
+
+    const updated = [nextIncident, ...incidents];
     setIncidents(updated);
-    await saveIncident(newIncident);
+    await saveIncident(persistedIncident);
 
     setIncidentType("");
     setIncidentDescription("");
@@ -1457,6 +1657,7 @@ export default function HomePage() {
         onClose={() => setIsEvidenceModalOpen(false)}
         parentType={evidenceTarget}
         initialTypeHint="payment"
+        vaultKey={vaultKey}
         onAttachmentSaved={(saved) => {
           if (evidenceTarget === "shift") {
             setShiftAttachedEvidence((prev) => [...prev, saved]);
@@ -1473,7 +1674,9 @@ export default function HomePage() {
         isOpen={isVaultModalOpen}
         onClose={() => setIsVaultModalOpen(false)}
         isConfigured={isVaultConfigured}
+        isLocked={isVaultLocked}
         onUnlock={handleUnlockVault}
+        onLock={handleLockVault}
         onSetupPin={handleSetupPin}
       />
 
@@ -1512,6 +1715,7 @@ export default function HomePage() {
         isOpen={isSyncModalOpen}
         onClose={() => setIsSyncModalOpen(false)}
         isVaultConfigured={isVaultConfigured}
+        vaultKey={vaultKey}
         shiftCount={shifts.length}
         incidentCount={incidents.length}
         evidenceCount={evidenceList.length}

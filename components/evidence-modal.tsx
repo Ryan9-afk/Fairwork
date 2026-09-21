@@ -13,6 +13,7 @@ interface EvidenceModalProps {
   parentType: "shift" | "incident";
   onAttachmentSaved: (attachment: EvidenceAttachment) => void;
   initialTypeHint?: "payment" | "injury" | "general";
+  vaultKey?: CryptoKey | null;
 }
 
 export function EvidenceModal({
@@ -22,6 +23,7 @@ export function EvidenceModal({
   parentType,
   onAttachmentSaved,
   initialTypeHint = "payment",
+  vaultKey,
 }: EvidenceModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -67,7 +69,8 @@ export function EvidenceModal({
         file,
         parentType,
         parentId,
-        notes
+        notes,
+        vaultKey
       );
       onAttachmentSaved(saved);
       onClose();
