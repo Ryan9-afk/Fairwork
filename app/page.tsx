@@ -26,6 +26,7 @@ import {
   Languages,
   Lock,
   MapPin,
+  Menu,
   Plus,
   ReceiptText,
   Scale,
@@ -34,6 +35,7 @@ import {
   Sparkles,
   Unlock,
   User,
+  X,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -182,6 +184,7 @@ export default function HomePage() {
   const [savedPulse, setSavedPulse] = useState(false);
   const [toastMessage, setToastMessage] = useState("Shift saved to your device");
   const [isOnline, setIsOnline] = useState(true);
+  const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   const [isSavingShift, setIsSavingShift] = useState(false);
   const [isSavingIncident, setIsSavingIncident] = useState(false);
 
@@ -856,6 +859,7 @@ export default function HomePage() {
           <span className={`connection-chip ${isOnline ? "online" : "offline"}`} role="status">
             <i /> {isOnline ? "Online" : "Offline · saves on device"}
           </span>
+          <div className="header-action-strip">
           {/* Mode Switcher: Sample Demo vs Clean Profile */}
           <button
             type="button"
@@ -935,11 +939,50 @@ export default function HomePage() {
           </Button>
 
           {/* Notifications */}
-          <Button variant="iosTinted" size="iosIcon" className="notification" aria-label="Notifications">
+          <Button variant="iosTinted" size="iosIcon" className="notification" aria-label="Notifications" onClick={() => showToast("No new notifications") }>
             <Bell size={19} />
             <i />
           </Button>
+          </div>
+
+          <button
+            type="button"
+            className="header-menu-trigger"
+            aria-label={isHeaderMenuOpen ? "Close quick actions" : "Open quick actions"}
+            aria-expanded={isHeaderMenuOpen}
+            aria-controls="header-quick-menu"
+            onClick={() => setIsHeaderMenuOpen((open) => !open)}
+          >
+            {isHeaderMenuOpen ? <X size={21} /> : <Menu size={22} />}
+          </button>
         </div>
+
+        {isHeaderMenuOpen && (
+          <>
+            <button className="header-menu-backdrop" type="button" aria-label="Close quick actions" onClick={() => setIsHeaderMenuOpen(false)} />
+            <nav className="header-quick-menu" id="header-quick-menu" aria-label="Quick actions">
+              <button type="button" onClick={() => { toggleProfileMode(); setIsHeaderMenuOpen(false); }}>
+                {isDemoMode ? <User /> : <Sparkles />}
+                <span><b>{isDemoMode ? "Start a clean profile" : "Load sample demo"}</b><small>{isDemoMode ? "Leave Amina’s sample records" : "Explore the completed worker journey"}</small></span>
+              </button>
+              <button type="button" onClick={() => { setIsSyncModalOpen(true); setIsHeaderMenuOpen(false); }}>
+                <Cloud /><span><b>Cloud backup</b><small>{isDemoMode ? "Disabled while viewing demo data" : "Upload an encrypted backup"}</small></span>
+              </button>
+              <button type="button" onClick={() => { setIsAssistantOpen(true); setIsHeaderMenuOpen(false); }}>
+                <Sparkles /><span><b>Rights assistant</b><small>Explain a record in plain language</small></span>
+              </button>
+              <button type="button" onClick={() => { setIsFeaturePhoneOpen(true); setIsHeaderMenuOpen(false); }}>
+                <Smartphone /><span><b>Feature-phone intake</b><small>Preview USSD and WhatsApp access</small></span>
+              </button>
+              <button type="button" onClick={() => { setLang(lang === "en" ? "sw" : "en"); setIsHeaderMenuOpen(false); }}>
+                <Languages /><span><b>{lang === "en" ? "Use Kiswahili" : "Use English"}</b><small>Change the interface language</small></span>
+              </button>
+              <button type="button" onClick={() => { showToast("No new notifications"); setIsHeaderMenuOpen(false); }}>
+                <Bell /><span><b>Notifications</b><small>No new notifications</small></span>
+              </button>
+            </nav>
+          </>
+        )}
       </header>
 
       <div className="desktop-grid" id="top">
