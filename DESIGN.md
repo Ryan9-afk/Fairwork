@@ -12,18 +12,18 @@ colors:
   danger: "#ff453a"
 typography:
   display:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif"
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Geist Fairwork', 'Segoe UI', sans-serif"
     fontSize: "1.875rem"
     fontWeight: 680
     lineHeight: 1.08
     letterSpacing: "-0.04em"
   body:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif"
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Geist Fairwork', 'Segoe UI', sans-serif"
     fontSize: "0.875rem"
     fontWeight: 400
     lineHeight: 1.45
   label:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif"
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Geist Fairwork', 'Segoe UI', sans-serif"
     fontSize: "0.75rem"
     fontWeight: 650
     lineHeight: 1.2
@@ -88,10 +88,10 @@ The palette combines warm paper neutrals with small, purposeful safety signals.
 
 ## Typography
 
-**Display Font:** Platform UI sans with Segoe UI fallback
-**Body Font:** Platform UI sans with Segoe UI fallback
+**Display Font:** SF Pro on Apple devices; self-hosted Geist elsewhere
+**Body Font:** SF Pro on Apple devices; self-hosted Geist elsewhere
 
-**Character:** Compact and familiar, with strong numerals for money and hours. Hierarchy comes from weight and scale rather than ornamental type.
+**Character:** Compact and familiar, with strong numerals for money and hours. Geist keeps the same crisp, neutral rhythm on Windows and Android where SF Pro is unavailable. Hierarchy comes from weight and scale rather than ornamental type.
 
 ### Hierarchy
 - **Display** (680, 1.875rem, 1.08): Page titles and major record headings.

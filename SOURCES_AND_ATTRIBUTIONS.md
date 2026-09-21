@@ -13,6 +13,7 @@ This register records third-party code, design guidance, icons, legal authoritie
 | [Apple Design resources and Human Interface Guidelines](https://developer.apple.com/design/) | Reference for an iOS-inspired information hierarchy, grouped surfaces, familiar navigation, and touch-first controls. No Apple artwork, SF Symbols files, or proprietary design-kit assets are copied into the product. | Visual rules in `app/globals.css` and the documented design system | Guidance/reference only |
 | [Apple UI design tips](https://developer.apple.com/design/tips/) | Minimum 44-point touch targets, screen-fitting layouts, legible text, contrast, and proximity between controls and the content they affect. | Button sizes, bottom navigation, grouped form rows, responsive layout | Guidance/reference only |
 | [Lucide Icons](https://lucide.dev/) | Interface icons including check, calendar, briefcase, receipt, shield, folder, and alert symbols. | `app/page.tsx` | ISC license; installed package license at `node_modules/lucide-react/LICENSE` |
+| [Geist](https://vercel.com/font) | Self-hosted variable UI font used as the non-Apple fallback. Apple devices continue to use their native SF Pro system font. | `public/fonts/geist-latin.woff2`; font stack in `app/globals.css` | SIL Open Font License 1.1 |
 
 ### Component decision
 
