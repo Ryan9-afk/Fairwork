@@ -83,206 +83,120 @@ export function WorkerProfileModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      className="profile-modal-backdrop"
       role="dialog"
       aria-modal="true"
       aria-labelledby="worker-profile-title"
     >
-      <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-gray-100 flex flex-col max-h-[92vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-gray-100">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-              <User size={20} />
-            </div>
-            <div>
-              <h3 id="worker-profile-title" className="text-base font-bold text-gray-900 leading-tight">
-                {isFirstVisit ? "Karibu! Set Up Worker Profile" : "Worker Profile & Ledger"}
-              </h3>
-              <p className="text-[11px] text-gray-500">
-                Stored strictly on your device for your Haki Dossier
-              </p>
-            </div>
+      <div className="profile-sheet">
+        <header className="profile-sheet-header">
+          <div className="profile-sheet-mark"><User size={22} /></div>
+          <div>
+            <h2 id="worker-profile-title">{isFirstVisit ? "Set up your work record" : "Your worker profile"}</h2>
+            <p>{isFirstVisit ? "One minute now makes every record easier to identify." : "Used to label records and prepare your dossier."}</p>
           </div>
+          <button type="button" onClick={onClose} className="profile-close" aria-label="Close profile setup"><X size={20} /></button>
+        </header>
 
-          {!isFirstVisit && (
-            <button
-              onClick={onClose}
-              className="p-1.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
+        <div className="profile-sheet-scroll">
+          {onToggleMode && (
+            <div className={`profile-mode-row ${isDemoMode ? "demo" : "personal"}`}>
+              <span className="profile-mode-icon">{isDemoMode ? <Sparkles size={17} /> : <ShieldCheck size={17} />}</span>
+              <span><b>{isDemoMode ? "Sample journey" : "Personal records"}</b><small>{isDemoMode ? "Amina’s fictional records are loaded" : "A clean ledger for your own entries"}</small></span>
+              <button
+                type="button"
+                onClick={() => {
+                  onToggleMode();
+                  if (isDemoMode) {
+                    setName(""); setPhone(""); setCounty("Nairobi");
+                  } else {
+                    setName("Amina M."); setPhone("0712 345 678"); setCounty("Nairobi"); setSector("construction");
+                  }
+                }}
+              >
+                {isDemoMode ? "Start clean" : "Try demo"}
+              </button>
+            </div>
           )}
-        </div>
 
-        {/* Quick Demo vs Clean Switcher Banner */}
-        {onToggleMode && (
-          <div className="mt-4 p-3 bg-gray-50 rounded-2xl border border-gray-200/80 flex items-center justify-between gap-2.5">
-            <div className="text-left">
-              <span className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
-                {isDemoMode ? (
-                  <>
-                    <Sparkles size={13} className="text-amber-600" />
-                    <span>Sample Demo Data Active</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck size={13} className="text-emerald-600" />
-                    <span>Personal Clean Profile Active</span>
-                  </>
-                )}
-              </span>
-              <span className="text-[10px] text-gray-500 block">
-                {isDemoMode
-                  ? "Amina M. prefilled with sample shifts"
-                  : "Clean ledger ready for your own records"}
-              </span>
-            </div>
-            <Button
-              type="button"
-              variant="iosTinted"
-              size="sm"
-              onClick={() => {
-                onToggleMode();
-                if (isDemoMode) {
-                  setName("");
-                  setPhone("");
-                  setCounty("Nairobi");
-                } else {
-                  setName("Amina M.");
-                  setPhone("0712 345 678");
-                  setCounty("Nairobi");
-                  setSector("construction");
-                }
-              }}
-              className={`text-xs h-8 px-2.5 font-bold shrink-0 ${
-                isDemoMode
-                  ? "text-emerald-800 bg-emerald-100 hover:bg-emerald-200"
-                  : "text-amber-900 bg-amber-100 hover:bg-amber-200"
-              }`}
-            >
-              {isDemoMode ? "Start New Profile" : "Load Sample (Amina)"}
-            </Button>
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          {/* Name Field */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-              <User size={13} className="text-blue-600" />
-              Your Name / Preferred Name <span className="text-red-500">*</span>
-            </label>
+          <form id="worker-profile-form" onSubmit={handleSubmit} className="profile-form">
+            <label className="profile-field profile-name-field">
+              <span><User size={15} /> Preferred name <b>Required</b></span>
             <input
               type="text"
               required
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Amina Mwangi or John K."
-              className="w-full h-11 px-3.5 rounded-xl bg-gray-50 border border-gray-200 text-sm font-medium text-gray-900 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+              placeholder="For example, Amina M."
+              aria-describedby="profile-name-help"
             />
-            <p className="text-[10px] text-gray-400">
-              Appears as the Complainant on your dispute brief and audit register.
-            </p>
-          </div>
-
-          {/* Primary Sector */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-              <Briefcase size={13} className="text-blue-600" />
-              Primary Work Sector
+              <small id="profile-name-help">Shown on your records. You can change it later.</small>
             </label>
+
+            <div className="profile-field-grid">
+            <label className="profile-field">
+              <span><Briefcase size={15} /> Work sector</span>
             <select
               value={sector}
               onChange={(e) => setSector(e.target.value as KenyanSector)}
-              className="w-full h-11 px-3 rounded-xl bg-gray-50 border border-gray-200 text-sm font-medium text-gray-900 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
             >
               <option value="construction">Construction & Artisans (Ujenzi)</option>
               <option value="agriculture">Agriculture & Tea Picking (Kilimo)</option>
               <option value="domestic">Domestic Workers (Wafanyakazi wa Nyumbani)</option>
               <option value="gig_delivery">Gig Delivery & Boda Boda</option>
             </select>
-          </div>
-
-          {/* Location / County */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-              <MapPin size={13} className="text-blue-600" />
-              Work County / Town
             </label>
+
+            <label className="profile-field">
+              <span><MapPin size={15} /> County or town</span>
             <input
               type="text"
               value={county}
               onChange={(e) => setCounty(e.target.value)}
-              placeholder="e.g. Nairobi, Mombasa, Kiambu, Nakuru"
-              className="w-full h-11 px-3.5 rounded-xl bg-gray-50 border border-gray-200 text-sm font-medium text-gray-900 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+              placeholder="For example, Nairobi"
             />
-          </div>
-
-          {/* Phone / M-Pesa Number (Optional) */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-              <Phone size={13} className="text-blue-600" />
-              Phone / M-Pesa Number <span className="text-gray-400 font-normal">(Optional)</span>
             </label>
+            </div>
+
+            <label className="profile-field">
+              <span><Phone size={15} /> Phone or M-Pesa number <i>Optional</i></span>
             <input
               type="tel"
+              inputMode="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="e.g. 0712 345 678"
-              className="w-full h-11 px-3.5 rounded-xl bg-gray-50 border border-gray-200 text-sm font-medium text-gray-900 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+              placeholder="For example, 0712 345 678"
+              aria-describedby="profile-phone-help"
             />
-            <p className="text-[10px] text-gray-400">
-              Used to reconcile payment proofs and SMS audit trails.
-            </p>
-          </div>
+              <small id="profile-phone-help">Helps match payment proof to your records.</small>
+            </label>
 
-          {/* Privacy Guarantee Note */}
-          <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-100/80 flex items-start gap-2">
-            <ShieldCheck size={16} className="text-emerald-700 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-emerald-900 leading-snug">
-              <strong>Device-first profile:</strong> Details stay on this device until you choose cloud backup. Profile fields are included in that backup; sensitive record content can be encrypted with your PIN.
-            </p>
-          </div>
+            <p className="profile-privacy-note"><ShieldCheck size={16} /><span><b>Saved on this device.</b> Profile details are uploaded only if you choose cloud backup.</span></p>
 
           {error && (
-            <div className="text-xs text-red-600 bg-red-50 p-2.5 rounded-xl border border-red-100">
-              {error}
-            </div>
+              <div className="profile-error" role="alert">{error}</div>
           )}
+          </form>
+        </div>
 
-          {/* Submit */}
-          <div className="pt-2 flex flex-col gap-2">
+        <footer className="profile-sheet-footer">
             <Button
               type="submit"
+              form="worker-profile-form"
               variant="iosPrimary"
               disabled={isSaving || !name.trim()}
-              className="w-full h-12 text-sm font-semibold"
             >
               {isSaving ? (
-                "Saving..."
+                "Saving…"
               ) : (
                 <>
-                  <Check size={18} /> {isFirstVisit ? "Start Using Fairwork Pulse" : "Save Profile"}
+                  <Check size={18} /> {isFirstVisit ? "Create my work record" : "Save changes"}
                 </>
               )}
             </Button>
-
-            {!isFirstVisit && (
-              <Button
-                type="button"
-                variant="iosPlain"
-                onClick={onClose}
-                className="w-full text-xs text-gray-500"
-              >
-                Cancel
-              </Button>
-            )}
-          </div>
-        </form>
+            <button type="button" className="profile-cancel" onClick={onClose}>{isFirstVisit ? "I’ll do this later" : "Cancel"}</button>
+        </footer>
       </div>
     </div>
   );
