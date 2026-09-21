@@ -1,126 +1,229 @@
-# vinext-starter
+# Fairwork Pulse 🇰🇪
+> **Pocket Evidence Wallet & Labour Rights Engine for Kenyan Casual and Informal Workers**
 
-A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
+[![Next.js](https://img.shields.io/badge/Next.js-16.3-black?logo=next.js)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19.2-blue?logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL%20%26%20Storage-3ECF8E?logo=supabase)](https://supabase.com/)
+[![Web Crypto](https://img.shields.io/badge/Web%20Crypto-AES--GCM--256-orange)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API)
+[![Gemini](https://img.shields.io/badge/Google%20Gemini-AI%20Rights%20Assistant-8E75B2?logo=google)](https://ai.google.dev/)
+[![Netlify Status](https://img.shields.io/badge/Netlify-Ready-00C7B7?logo=netlify)](https://www.netlify.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## Prerequisites
+---
 
-- Node.js `>=22.13.0`
-- Portable: Windows, macOS, or Linux; no Bash required
-- Managed Linux: managed Linux runtime with Bash, `flock`, `curl`, `sha256sum`, and GNU `timeout`
-- Git is required only for publishing
+## 📌 Executive Summary
 
-## Sites Lifecycle
+**Fairwork Pulse** is a mobile-first "Pocket Evidence Wallet" engineered for Kenya's **~15 million informal, casual, and gig workers**—including construction fundis and mjengo casuals, agricultural and tea-estate pickers, domestic caregivers, and app-based delivery riders.
 
-The Sites initializer copies the shared starter and selects managed-linux only when `SITES_MANAGED_LINUX_CONTAINER=1`; otherwise it selects portable. It saves the selection only in ignored `.sites-runtime/execution-profile.json`. Both profiles copy/configure first, then use the plugin's separate `install-dependencies.mjs` step to measure installation independently. Edit source under `app/` and follow the Sites skill for installation, preview, builds, and publishing.
+Because casual workers often lack written contracts or payslips, they are routinely vulnerable to wage withholding, unlawful deductions, unpaid overtime, and uncompensated injuries. **Fairwork Pulse** puts contemporaneous, court-admissible record keeping directly into the hands of the worker—not the employer or platform.
 
-Whenever reopening or moving a checkout, run `node <plugin-root>/scripts/configure-execution-profile.mjs` before project commands. Profile changes do not alter tracked source or require reinstalling otherwise-valid dependencies; restart an existing preview to use the new selection. Do not commit or upload `.sites-runtime/`.
+> **Core Promise:** *Proof of Work. Power to Remedy.*
 
-This starter does not use `wrangler.jsonc`.
+Built for the **Strathmore / iLab Africa Hackathon 2026** (Nairobi, Kenya).
 
-`install:ci` runs `npm ci` once against the shared lockfile, disables parent-workspace discovery, and includes required dev/optional dependencies despite production/omit settings. Sharp defaults to prebuilt binaries unless explicitly configured otherwise. Do not overlap installers.
+---
 
-- **Portable:** Preserve host HOME, npm cache, registry, proxy, temporary paths, retry/concurrency settings, and lifecycle-script policy. Use `--prefer-offline --no-audit --no-fund`.
-- **Managed Linux:** Use the existing project-local HOME/cache/tmp setup and Linux install lock, tarball preflight, and timeout. Restore the image-seeded npm cache only when its lockfile hash matches; retain network fallback. Builds keep their existing timeout. These helpers are not invoked by the portable profile.
+## 🏛️ The 7 Core Architectural Pillars
 
-`scripts/sites-env.mjs` preserves the caller's HOME, npm cache, proxy, XDG, and temporary-directory configuration while defaulting Wrangler and Miniflare state to the checkout. If npm reports an unwritable cache, select a writable path with `npm_config_cache` for that install. The `dev` and `start` scripts also keep Wrangler logs inside the checkout. Generated `.sites-runtime/` and `.wrangler/` directories are disposable and ignored by Git.
-
-On portable, `npm run dev` uses `vinext dev` with HMR, starting at port 5173. Vinext records the running server in ignored `.vinext/` state, rejects an ordinary duplicate launch, and recovers stale state after a stopped process; exactly simultaneous starts can race. Pass `--port <port>` or `--hostname <host>` after `npm run dev --` when needed; keep portable previews on loopback.
-
-For browser QA on managed Linux, use `sites-preview start`. The project's dev script runs Vite and accepts the supervisor's `--host 0.0.0.0 --port 4173 --strictPort` arguments. The internal browser uses `http://terminal.local:4173/`; it is not a user-facing URL. The supervisor owns the preview lifecycle. The ignored local profile survives the supervisor's cleared process environment.
-
-The portable profile simulates ChatGPT sign-in only for loopback development requests. Visit `/signin-with-chatgpt?return_to=/` to sign in as `local_seedy` (`seedy@sites.test`, display name `Seedy`) and `/signout-with-chatgpt?return_to=/` to sign out. The development cookie preserves that identity across server restarts. Mock auth is disabled in the managed-linux profile and is not included in production builds; hosted authentication remains dispatch-owned.
-
-The Worker uses `vinext/server/fetch-handler`, including Vinext's config-aware image handling. After building, `npm start` runs that Worker locally through Wrangler on `127.0.0.1`, sharing `.wrangler/state` with dev preview and local D1 migrations; it does not deploy the site or simulate sign-in. Use the URL printed by the server. Pass `npm start -- --port <port>` to select a different built-preview port.
-
-Local previews use Miniflare's placeholder `Request.cf` metadata without a network lookup. Set `CLOUDFLARE_CF_FETCH_ENABLED=true` to opt into fetching preview metadata; this setting does not change hosted request metadata.
-
-Local tool usage metrics are disabled by default. Set `WRANGLER_SEND_METRICS=true` to opt in.
-
-## Included Shape
-
-- edit site code under `app/`
-- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
-- `db/schema.ts` starts intentionally empty
-- `@cloudflare/workers-types` provides Worker types; `cloudflare-env.d.ts` declares optional `DB`/`BUCKET` bindings—update these declarations if binding names change
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
-
-The user ID is stable for the same user on the same Site and different across Sites. Use it as the durable user key; use email and name for display or contact purposes.
-
-SIWC-authenticated workspace sites may also receive `oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty `name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by `oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```
+                     ┌──────────────────────────────────────────────┐
+                     │           FAIRWORK PULSE WALLET              │
+                     │          (Mobile-First Client)               │
+                     └───────┬──────────────────────────────┬───────┘
+                             │                              │
+             ┌───────────────▼──────────────┐       ┌───────▼──────────────────────┐
+             │   1. CLIENT-SIDE ENCRYPTED   │       │   2. TAMPER-PROOF EVIDENCE   │
+             │             VAULT            │       │         ATTACHMENTS          │
+             │   - PBKDF2 (100k iters)      │       │   - M-Pesa / Receipt Capture │
+             │   - AES-GCM-256 Web Crypto   │       │   - Native SHA-256 Hash      │
+             │   - Local-First IndexedDB    │       │   - Court Chain-of-Custody   │
+             └───────────────┬──────────────┘       └───────┬──────────────────────┘
+                             │                              │
+             ┌───────────────▼──────────────┐       ┌───────▼──────────────────────┐
+             │   3. GEMINI AI ASSISTANT     │       │   4. ZERO-KNOWLEDGE CLOUD    │
+             │   - Bilingual (EN & SW)      │       │             SYNC             │
+             │   - Employment Act 2007      │       │   - Supabase PostgreSQL      │
+             │   - Offline Rules Fallback   │       │   - Strict RLS & Storage     │
+             └───────────────┬──────────────┘       └───────┬──────────────────────┘
+                             │                              │
+             ┌───────────────▼──────────────┐       ┌───────▼──────────────────────┐
+             │   5. REGIONAL RISK MONITOR   │       │   6. DYNAMIC STATUTORY       │
+             │   - Sub-County Telemetry     │       │         RULES ENGINE         │
+             │   - Differential Privacy     │       │   - 1.5x Daily Overtime      │
+             │   - COTU-K / Labour Officers │       │   - 2.0x Sunday Double-Time  │
+             └───────────────┬──────────────┘       └───────┬──────────────────────┘
+                             │                              │
+                             └───────────────┬──────────────┘
+                                             │
+                             ┌───────────────▼──────────────┐
+                             │  7. FEATURE-PHONE (KITOCHI)  │
+                             │            INTAKE            │
+                             │   - 2G USSD (*384*2026#)     │
+                             │   - WhatsApp Gateway Bot     │
+                             └──────────────────────────────┘
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+### 1. Zero-Knowledge Client-Side Encrypted Vault
+- **Master PIN Derivation**: Uses the browser's native **Web Crypto API** with **PBKDF2** (100,000 iterations, SHA-256) and a unique cryptographic salt.
+- **Authenticated Encryption**: Sensitive financial amounts, employer identities, and dispute notes are encrypted using **AES-GCM-256** directly on the worker's device.
+- **Offline Persistence**: Shift and incident indices are stored in browser **IndexedDB** (`fairwork_pulse_vault_v1`). Plaintext dates remain locally searchable while financial values stay encrypted.
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs optional or required ChatGPT sign-in:
+### 2. Tamper-Proof Evidence & Image Attachment with SHA-256 Chain of Custody
+- **M-Pesa & Receipt Capture**: Workers attach photos of M-Pesa SMS confirmations, paper wage vouchers, gate badges, or clinical injury treatment cards.
+- **Cryptographic Digest**: The client immediately computes a raw 256-bit **SHA-256 byte-hash** (`crypto.subtle.digest`) on the binary image before storage.
+- **Interactive Lightbox**: Full-resolution image preview, document classification badges, timestamp verification, and SHA-256 inspection.
+- **Court Admissibility**: The cryptographic hash is permanently stamped into the **Haki Dossier**, establishing contemporaneous chain-of-custody under Kenyan evidence rules.
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use the returned `userId` as the stable user key for user-owned records; do not use email as a durable identifier.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send anonymous visitors through Sign in with ChatGPT.
-- In a Server Component, start sign-in with `<a href={chatGPTSignInPath(returnTo)} target="_top">`. The auth helper module is server-only; do not import it into a Client Component.
-- Do not use `fetch`, XHR, a client-side router, or a framework link that can prefetch the sign-in route. SIWC must start as a top-level navigation.
-- Never request the AuthAPI authorization endpoint directly. The dispatch-owned `/signin-with-chatgpt` route must start the SIWC flow.
-- Use `chatGPTSignOutPath(returnTo)` for browser sign-out links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because they depend on per-request identity headers.
+### 3. Bilingual Gemini AI Legal Rights Assistant
+- **Kenya Labour Law Intelligence**: Powered by Google Gemini (`gemini-2.5-flash`), with a system prompt strictly grounded in the *Employment Act 2007*, *Regulation of Wages (General) Order*, and *Work Injury Benefits Act (WIBA) 2007*.
+- **English & Sheng/Kiswahili Support**: Allows casual workers to ask questions in their preferred language (e.g. *"Mwajiri amekataa kunilipa overtime ya Sunday, nifanye nini?"*).
+- **Graceful Offline Fallback**: If network connectivity drops, the assistant switches to an embedded offline statutory knowledge base without failing.
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the OAuth cookies, and identity header injection. Do not implement app routes for those reserved paths. Routes that do not import and call the helper remain anonymous-compatible.
+### 4. Zero-Knowledge Supabase Cloud Sync
+- **PostgreSQL Database**: Configured with tables for `profiles`, `shifts`, `incidents`, and `evidence_files`.
+- **Row Level Security (RLS)**: Enforces tenant isolation on all tables using cached `(select auth.uid()) = user_id` policies.
+- **Private Storage Bucket**: Dedicated `evidence-vault` bucket with path-scoped RLS policies (`${user.id}/${evidence.id}.${ext}`).
+- **Zero-Knowledge Principle**: When encryption is active, only AES-GCM ciphertext payloads and hashes are uploaded. The server database never stores unencrypted wage rates or dispute notes.
 
-SIWC establishes identity only; it does not prove workspace membership. Use the Sites hosting platform's access policy controls for workspace-wide restrictions, or enforce explicit server-side membership or allowlist checks.
+### 5. Anonymized Regional Regulator & Union Risk Monitor
+- **Differential Privacy ($k \ge 5$)**: Aggregates risk telemetry across Kenyan sub-counties (Kilimani, Embakasi, Naivasha, Nakuru West, Kisumu) without revealing individual worker identities.
+- **Labour Inspector Telemetry**: Gives COTU-K union reps and Sub-County Labour Officers heatmap visibility into systemic wage withholding and safety hotspots.
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write actions tied to the current ChatGPT user. Leave public content anonymous.
+### 6. Dynamic Kenyan Legal Rules Engine
+- **Sector-Specific Schedules**:
+  - **Construction & Artisans** (*Ujenzi*) — KSh 1,180/day statutory benchmark
+  - **Agriculture & Tea** (*Kilimo*) — KSh 820/day
+  - **Domestic & Care Workers** (*Wafanyakazi wa Nyumbani*) — KSh 920/day
+  - **Gig Delivery & Boda Boda** (*Usafirishaji*) — KSh 1,250/day
+- **Statutory Audit Calculations**:
+  - Wage shortfalls (Employment Act §§ 17–19)
+  - Daily overtime (1.5× hourly rate for hours over statutory daily threshold)
+  - Sunday and Public Holiday rest-day double time (2.0× hourly rate)
 
-## Local D1 migrations
+### 7. Multi-Channel 2G Feature-Phone (Kitochi) Intake Simulator
+- **USSD Shortcode (`*384*2026#`)**: An interactive 2G USSD session simulator for non-smartphone casual workers.
+- **WhatsApp Gateway Bot**: Interactive SMS/WhatsApp string parser (`SHIFT [Employer] [Agreed] [Paid] [Hours]`) that computes the statutory deficit and injects the shift into the worker's device ledger.
 
-For a D1-backed local preview, generate SQL with `npm run db:generate`. Build once through the Sites skill's build entrypoint (or `npm run build` for standalone use) to generate `dist/server/wrangler.json`, rebuilding if bindings change. From the project root, apply each pending migration in order:
+---
 
-```sh
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_example.sql
+## 💻 Tech Stack
+
+| Layer | Technology |
+| :--- | :--- |
+| **Framework** | [Next.js 16](https://nextjs.org/) / [Vinext](https://github.com/cloudflare/vinext) (React 19) |
+| **Language** | [TypeScript 5.9](https://www.typescriptlang.org/) (Strict Mode) |
+| **Styling** | [Tailwind CSS v4](https://tailwindcss.com/) + Custom iOS "Pocket Evidence Wallet" Design System |
+| **Local Database** | Native [IndexedDB API](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API) via Custom Storage Engine |
+| **Cryptography** | Native [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API) (PBKDF2, AES-GCM-256, SHA-256) |
+| **Cloud Database** | [Supabase PostgreSQL](https://supabase.com/) with Row Level Security (RLS) |
+| **Cloud Storage** | [Supabase Storage](https://supabase.com/storage) (`evidence-vault` bucket) |
+| **AI Rights Bot** | [Google Gemini API](https://ai.google.dev/) (`gemini-2.5-flash`) |
+| **Hosting Targets** | [Netlify](https://www.netlify.com/), [Cloudflare Workers](https://workers.cloudflare.com/), [OpenAI Sites](https://chatgpt.com/) |
+
+---
+
+## 🚀 Getting Started Locally
+
+### 1. Prerequisites
+- **Node.js**: `v22.13.0` or newer
+- **npm**: `v10.0.0` or newer
+- Git
+
+### 2. Clone and Install
+```bash
+git clone https://github.com/ryanreo/fairwork-pulse.git
+cd fairwork-pulse
+npm install
 ```
 
-Replace the filename with the pending migration and `DB` with your D1 binding name if different. Use `.wrangler/state`, not `.wrangler/state/v3`; Wrangler adds the versioned directories. Do not replay migrations already applied locally. This updates only the preview database; publishing applies production migrations separately.
+### 3. Environment Variables
+Copy the example environment configuration:
+```bash
+cp .env.example .env.local
+```
+Fill in your credentials in `.env.local`:
+```ini
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
 
-## Diagnostic Commands
+# Google Gemini API Key
+GEMINI_API_KEY=your-gemini-api-key
+```
 
-- `npm run install:ci`: perform the one locked dependency install
-- `npm run dev`: start the Vite/Vinext development server
-- `npm run build`: build the deployable Sites artifact
-- `npm run start`: preview the built Worker locally with D1/R2 support
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+### 4. Run Development Server
+```bash
+npm run dev
+```
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-When using the Sites plugin, follow its skill instructions for installation, builds, and publishing. These npm commands remain available for standalone use.
+### 5. Verification & Tests
+```bash
+# Run ESLint check (0 errors, 0 warnings)
+npm run lint
 
-The portable build runs Vinext directly without a host `timeout` command. The managed-linux build uses `scripts/build-verified.sh` and its existing `SITES_BUILD_TIMEOUT` setting.
+# Run Next.js / Vinext build validation
+npm run build
+```
 
-## Learn More
+---
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+## 🌐 Deploying to Netlify
+
+This repository is pre-configured for zero-friction Netlify deployment using [`netlify.toml`](netlify.toml).
+
+### Option A: 1-Click Netlify Import
+1. Push this repository to your GitHub account (`ryanreo/fairwork-pulse`).
+2. Log in to [Netlify](https://app.netlify.com/).
+3. Click **"Add new site"** > **"Import an existing project"** > Choose **GitHub**.
+4. Select `fairwork-pulse`.
+5. Netlify will automatically detect the settings from `netlify.toml`:
+   - **Build command:** `npm run build:next`
+   - **Publish directory:** `.next`
+   - **Plugin:** `@netlify/plugin-nextjs`
+6. In **Site Configuration** > **Environment variables**, add:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+   - `GEMINI_API_KEY`
+7. Click **"Deploy site"**!
+
+### Option B: Netlify CLI
+```bash
+# Install Netlify CLI
+npm install -g netlify-cli
+
+# Log in and deploy
+netlify login
+netlify init
+netlify deploy --build --prod
+```
+
+---
+
+## ⚖️ Legal Framework & Statutory Citations
+
+All statutory calculations and advice prompts are grounded directly in the Laws of Kenya:
+
+1. **Employment Act (No. 11 of 2007)**
+   - Section 17: Prohibition of unauthorized deductions
+   - Section 18: Timely payment of wages upon completion of task
+   - Section 27: Statutory rest day (at least one rest day per seven-day period)
+   - Section 35: Redundancy, termination procedures, and summary dismissal
+   - Section 29: Statutory 3-month fully paid maternity leave
+2. **Regulation of Wages (General) Order**
+   - Regulation 5: Standard statutory working hours (8 hours/day, 45–52 hours/week depending on sector)
+   - Regulation 6: Overtime multiplier at **1.5×** basic hourly rate
+   - Regulation 7: Sunday and gazetted public holiday multiplier at **2.0×** basic hourly rate
+3. **Work Injury Benefits Act (WIBA, No. 13 of 2007)**
+   - Employer liability for work-related injuries, emergency medical expenses, and disability compensation
+
+> *Disclaimer: Fairwork Pulse provides indicative statutory guidance based on Kenyan legislation. Records and dossiers are designed for dispute conciliation and legal advocacy, but do not replace legal representation.*
+
+---
+
+## 📄 License
+
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for details.
+
+Developed with ❤️ for Kenya's informal workforce.

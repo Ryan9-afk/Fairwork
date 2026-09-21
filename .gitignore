@@ -46,3 +46,7 @@ next-env.d.ts
 /.codex/
 /outputs/
 /work/
+.impeccable/
+.sites-package-stage/
+scratch/
+*.tar.gz
