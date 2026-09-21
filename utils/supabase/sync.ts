@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "./client";
-import { getAllShifts, getAllIncidents, getAllEvidence } from "@/lib/vault-db";
+import { getAllShifts, getAllIncidents, getAllEvidence, getWorkerProfile } from "@/lib/vault-db";
 import { encryptString } from "@/lib/crypto";
 
 export interface SyncStatus {
@@ -52,6 +52,25 @@ export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<
         error: "Supabase authentication required. Please sign in or enable anonymous sign-in in Supabase Auth settings.",
         errors: ["Authentication failed: No user session found."],
       };
+    }
+
+    // 0. Sync Worker Profile if present
+    try {
+      const workerProfile = await getWorkerProfile();
+      if (workerProfile?.name) {
+        await supabase.from("profiles").upsert(
+          {
+            id: user.id,
+            display_name: workerProfile.name,
+            phone: workerProfile.phone || null,
+            preferred_sector: workerProfile.sector || "construction",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" }
+        );
+      }
+    } catch (profileErr) {
+      console.warn("Failed to sync profile:", profileErr);
     }
 
     // 1. Fetch local shifts from IndexedDB

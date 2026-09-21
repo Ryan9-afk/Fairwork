@@ -62,8 +62,17 @@ export interface VaultMetadata {
   createdAt: string;
 }
 
+export interface WorkerProfile {
+  id: "current";
+  name: string;
+  phone?: string;
+  county?: string;
+  sector?: string;
+  updatedAt: string;
+}
+
 const DB_NAME = "fairwork_pulse_vault_v1";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -98,11 +107,65 @@ function openDatabase(): Promise<IDBDatabase> {
         evidenceStore.createIndex("parentType", "parentType", { unique: false });
         evidenceStore.createIndex("sha256Hash", "sha256Hash", { unique: false });
       }
+
+      if (!db.objectStoreNames.contains("worker_profile")) {
+        db.createObjectStore("worker_profile", { keyPath: "id" });
+      }
     };
 
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
+}
+
+// ---------------- Worker Profile ----------------
+
+export async function getWorkerProfile(): Promise<WorkerProfile | null> {
+  try {
+    const db = await openDatabase();
+    if (!db.objectStoreNames.contains("worker_profile")) {
+      const stored = typeof window !== "undefined" ? window.localStorage.getItem("fairwork-worker-profile") : null;
+      return stored ? JSON.parse(stored) : null;
+    }
+    return new Promise((resolve) => {
+      const tx = db.transaction("worker_profile", "readonly");
+      const store = tx.objectStore("worker_profile");
+      const req = store.get("current");
+      req.onsuccess = () => {
+        if (req.result) {
+          resolve(req.result);
+        } else {
+          const stored = typeof window !== "undefined" ? window.localStorage.getItem("fairwork-worker-profile") : null;
+          resolve(stored ? JSON.parse(stored) : null);
+        }
+      };
+      req.onerror = () => {
+        const stored = typeof window !== "undefined" ? window.localStorage.getItem("fairwork-worker-profile") : null;
+        resolve(stored ? JSON.parse(stored) : null);
+      };
+    });
+  } catch {
+    const stored = typeof window !== "undefined" ? window.localStorage.getItem("fairwork-worker-profile") : null;
+    return stored ? JSON.parse(stored) : null;
+  }
+}
+
+export async function saveWorkerProfile(profile: WorkerProfile): Promise<void> {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem("fairwork-worker-profile", JSON.stringify(profile));
+  }
+  try {
+    const db = await openDatabase();
+    if (db.objectStoreNames.contains("worker_profile")) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction("worker_profile", "readwrite");
+        const store = tx.objectStore("worker_profile");
+        const req = store.put(profile);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    }
+  } catch {}
 }
 
 // ---------------- Vault Metadata ----------------

@@ -33,6 +33,7 @@ import {
   Smartphone,
   Sparkles,
   Unlock,
+  User,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,8 @@ import {
   updateEvidenceAttachment,
   getVaultMetadata,
   saveVaultMetadata,
+  getWorkerProfile,
+  WorkerProfile,
   StoredShift,
   StoredIncident,
   EvidenceAttachment,
@@ -78,12 +81,7 @@ import { RegulatorDashboard } from "@/components/regulator-dashboard";
 import { FeaturePhoneModal } from "@/components/feature-phone-modal";
 import { CloudSyncModal } from "@/components/cloud-sync-modal";
 import { ImageViewerModal } from "@/components/image-viewer-modal";
-
-const seedShifts: StoredShift[] = [
-  { id: 1, date: "2026-09-18", employer: "Karibu Builders", location: "Kilimani", start: "07:30", end: "17:30", agreed: 1200, paid: 1000, sunday: false, sector: "construction" },
-  { id: 2, date: "2026-09-17", employer: "Karibu Builders", location: "Kilimani", start: "08:00", end: "16:30", agreed: 1200, paid: 1200, sunday: false, sector: "construction" },
-  { id: 3, date: "2026-09-14", employer: "Maua Contractors", location: "Ngara", start: "08:00", end: "15:00", agreed: 1100, paid: 700, sunday: true, sector: "construction" },
-];
+import { WorkerProfileModal } from "@/components/worker-profile-modal";
 
 const copy = {
   en: {
@@ -150,26 +148,61 @@ const copy = {
 
 const money = (value: number) => `KSh ${Math.round(value).toLocaleString("en-KE")}`;
 
+// Pre-filled Demo Dataset (Amina M.)
+const DEMO_PROFILE: WorkerProfile = {
+  id: "current",
+  name: "Amina M.",
+  phone: "0712 345 678",
+  county: "Nairobi",
+  sector: "construction",
+  updatedAt: "2026-09-20T10:00:00.000Z",
+};
+
+const DEMO_SHIFTS: StoredShift[] = [
+  { id: 1, date: "2026-09-18", employer: "Karibu Builders", location: "Kilimani", start: "07:30", end: "17:30", agreed: 1200, paid: 1000, sunday: false, sector: "construction" },
+  { id: 2, date: "2026-09-17", employer: "Karibu Builders", location: "Kilimani", start: "08:00", end: "16:30", agreed: 1200, paid: 1200, sunday: false, sector: "construction" },
+  { id: 3, date: "2026-09-14", employer: "Maua Contractors", location: "Ngara", start: "08:00", end: "15:00", agreed: 1100, paid: 700, sunday: true, sector: "construction" },
+];
+
+const DEMO_INCIDENTS: StoredIncident[] = [
+  {
+    id: 1,
+    date: "2026-09-16",
+    category: "wages",
+    description: "Employer withheld KSh 400 for lunch and site transport which was never agreed in writing.",
+    evidenceIds: [],
+    createdAt: "2026-09-16T17:00:00Z",
+  },
+];
+
 export default function HomePage() {
   const [lang, setLang] = useState<"en" | "sw">("en");
   const [active, setActive] = useState("home");
   const [savedPulse, setSavedPulse] = useState(false);
   const [toastMessage, setToastMessage] = useState("Shift saved to your device");
 
-  // Shifts, Incidents, Evidence
-  const [shifts, setShifts] = useState<StoredShift[]>(seedShifts);
+  // Mode state: 'demo' (Amina M. pre-filled) vs 'clean' (Personal profile)
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
+
+  // Worker Profile State
+  const [workerProfile, setWorkerProfile] = useState<WorkerProfile | null>(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isFirstVisit, setIsFirstVisit] = useState(false);
+
+  // Shifts, Incidents, Evidence - Starts completely clean by default
+  const [shifts, setShifts] = useState<StoredShift[]>([]);
   const [incidents, setIncidents] = useState<StoredIncident[]>([]);
   const [evidenceList, setEvidenceList] = useState<EvidenceAttachment[]>([]);
 
-  // Shift Form State
+  // Shift Form State - Starts clean without prefilled mock numbers
   const [form, setForm] = useState({
     employer: "",
     location: "",
-    date: "2026-09-20",
+    date: new Date().toISOString().split("T")[0],
     start: "08:00",
-    end: "17:30",
-    agreed: "1200",
-    paid: "1000",
+    end: "17:00",
+    agreed: "",
+    paid: "",
     sunday: false,
     sector: "construction" as KenyanSector,
   });
@@ -179,7 +212,7 @@ export default function HomePage() {
 
   // Incident Form State
   const [incidentType, setIncidentType] = useState<"injury" | "wages" | "maternity" | "">("");
-  const [incidentDate, setIncidentDate] = useState("2026-09-20");
+  const [incidentDate, setIncidentDate] = useState(new Date().toISOString().split("T")[0]);
   const [incidentDescription, setIncidentDescription] = useState("");
   const [incidentAttachedEvidence, setIncidentAttachedEvidence] = useState<EvidenceAttachment[]>([]);
 
@@ -213,56 +246,86 @@ export default function HomePage() {
     [form]
   );
 
+  // Worker display initials
+  const workerInitials = useMemo(() => {
+    if (!workerProfile?.name) return "FP";
+    const parts = workerProfile.name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }, [workerProfile?.name]);
+
   // Hydrate Data on Mount
   useEffect(() => {
     let isMounted = true;
 
     async function loadData() {
       try {
-        // 1. Vault Meta
+        // 0. Check Mode Preference
+        const savedMode = typeof window !== "undefined" ? window.localStorage.getItem("fairwork-profile-mode") : null;
+        const isDemo = savedMode === "demo";
+        if (isMounted) setIsDemoMode(isDemo);
+
+        if (isDemo) {
+          if (isMounted) {
+            setWorkerProfile(DEMO_PROFILE);
+            setShifts(DEMO_SHIFTS);
+            setIncidents(DEMO_INCIDENTS);
+            setForm((prev) => ({
+              ...prev,
+              employer: "Karibu Builders",
+              location: "Kilimani",
+              agreed: "1200",
+              paid: "1000",
+              sector: "construction",
+            }));
+          }
+        } else {
+          // 1. Worker Profile
+          const profile = await getWorkerProfile();
+          if (isMounted) {
+            if (profile && profile.name) {
+              setWorkerProfile(profile);
+              if (profile.sector) {
+                setForm((prev) => ({ ...prev, sector: profile.sector as KenyanSector }));
+              }
+            } else {
+              // First time user: Prompt to add name and details!
+              setIsFirstVisit(true);
+              setIsProfileModalOpen(true);
+            }
+          }
+
+          // 2. Shifts from IndexedDB - Starts Clean
+          const dbShifts = await getAllShifts();
+          if (isMounted) {
+            if (dbShifts && dbShifts.length > 0) {
+              setShifts(dbShifts);
+            } else {
+              setShifts([]);
+            }
+          }
+
+          // 3. Incidents
+          const dbIncidents = await getAllIncidents();
+          if (isMounted && dbIncidents) {
+            setIncidents(dbIncidents);
+          }
+        }
+
+        // Vault Meta
         const meta = await getVaultMetadata();
         if (meta && isMounted) {
           setIsVaultConfigured(meta.isPinEnabled);
           setIsVaultLocked(meta.isPinEnabled && !vaultKey);
         }
 
-        // 2. Shifts from IndexedDB (fallback to localStorage or seed)
-        const dbShifts = await getAllShifts();
-        if (isMounted) {
-          if (dbShifts && dbShifts.length > 0) {
-            setShifts(dbShifts);
-          } else {
-            const stored = window.localStorage.getItem("fairwork-pulse-shifts");
-            if (stored) {
-              try {
-                const parsed = JSON.parse(stored);
-                setShifts(parsed);
-                // Backfill to IndexedDB
-                for (const s of parsed) {
-                  await saveShift(s);
-                }
-              } catch {}
-            } else {
-              for (const s of seedShifts) {
-                await saveShift(s);
-              }
-            }
-          }
-        }
-
-        // 3. Incidents
-        const dbIncidents = await getAllIncidents();
-        if (isMounted && dbIncidents) {
-          setIncidents(dbIncidents);
-        }
-
-        // 4. Evidence
+        // Evidence
         const dbEvidence = await getAllEvidence();
         if (isMounted && dbEvidence) {
           setEvidenceList(dbEvidence);
         }
 
-        // 5. Query param screen
+        // Query param screen
         const requested = new URLSearchParams(window.location.search).get("screen") || "home";
         if (["home", "records", "incidents", "dossier", "regulator"].includes(requested) && isMounted) {
           setActive(requested);
@@ -278,6 +341,65 @@ export default function HomePage() {
       isMounted = false;
     };
   }, [vaultKey]);
+
+  // Toggle between Pre-filled Demo (Amina M.) and Clean Personal Profile
+  const toggleProfileMode = async () => {
+    if (isDemoMode) {
+      // Switch to Clean Profile
+      setIsDemoMode(false);
+      window.localStorage.setItem("fairwork-profile-mode", "clean");
+
+      const savedProfile = await getWorkerProfile();
+      if (savedProfile && savedProfile.name && savedProfile.name !== "Amina M.") {
+        setWorkerProfile(savedProfile);
+        setIsFirstVisit(false);
+      } else {
+        setWorkerProfile(null);
+        setIsFirstVisit(true);
+        setIsProfileModalOpen(true);
+      }
+
+      const dbShifts = await getAllShifts();
+      setShifts(dbShifts && dbShifts.length > 0 ? dbShifts : []);
+
+      const dbIncidents = await getAllIncidents();
+      setIncidents(dbIncidents && dbIncidents.length > 0 ? dbIncidents : []);
+
+      setForm({
+        employer: "",
+        location: "",
+        date: new Date().toISOString().split("T")[0],
+        start: "08:00",
+        end: "17:00",
+        agreed: "",
+        paid: "",
+        sunday: false,
+        sector: (savedProfile?.sector as KenyanSector) || "construction",
+      });
+
+      showToast("Switched to Clean Personal Profile");
+    } else {
+      // Switch to Demo Mode (Amina M.)
+      setIsDemoMode(true);
+      window.localStorage.setItem("fairwork-profile-mode", "demo");
+      setWorkerProfile(DEMO_PROFILE);
+      setShifts(DEMO_SHIFTS);
+      setIncidents(DEMO_INCIDENTS);
+      setForm({
+        employer: "Karibu Builders",
+        location: "Kilimani",
+        date: new Date().toISOString().split("T")[0],
+        start: "07:30",
+        end: "17:30",
+        agreed: "1200",
+        paid: "1000",
+        sunday: false,
+        sector: "construction",
+      });
+      setIsFirstVisit(false);
+      showToast("Switched to Sample Demo (Amina M. pre-filled)");
+    }
+  };
 
   function navigate(id: string) {
     setActive(id);
@@ -675,16 +797,24 @@ export default function HomePage() {
         <button
           className="profile-greeting"
           type="button"
-          onClick={() => setIsVaultModalOpen(true)}
+          onClick={() => setIsProfileModalOpen(true)}
           aria-label="Worker profile and security settings"
+          title="Click to edit worker name and details"
         >
-          <span className="profile-photo">AM</span>
+          <span className="profile-photo">{workerInitials}</span>
           <span>
             <small>Welcome back,</small>
             <strong className="flex items-center gap-1.5">
-              Amina M.
+              {workerProfile?.name || "Set Your Name"}
               {isVaultConfigured && (
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-semibold flex items-center gap-0.5 ${isVaultLocked ? "text-amber-800 bg-amber-100" : "text-emerald-700 bg-emerald-100/80"}`}>
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsVaultModalOpen(true);
+                  }}
+                  className={`text-[10px] px-1.5 py-0.2 rounded-md font-semibold flex items-center gap-0.5 cursor-pointer ${isVaultLocked ? "text-amber-800 bg-amber-100 hover:bg-amber-200" : "text-emerald-700 bg-emerald-100/80 hover:bg-emerald-200/80"}`}
+                  title={isVaultLocked ? "Vault locked - click to unlock" : "AES-256 vault active - click to manage"}
+                >
                   {isVaultLocked ? <Lock size={10} /> : <Unlock size={10} />} {isVaultLocked ? "Locked" : "AES-256"}
                 </span>
               )}
@@ -693,6 +823,36 @@ export default function HomePage() {
         </button>
 
         <div className="header-actions">
+          {/* Mode Switcher: Sample Demo vs Clean Profile */}
+          <button
+            type="button"
+            onClick={toggleProfileMode}
+            className={`h-9 px-3 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs border cursor-pointer ${
+              isDemoMode
+                ? "bg-amber-500/10 text-amber-900 border-amber-300 hover:bg-amber-500/20"
+                : "bg-emerald-500/10 text-emerald-900 border-emerald-300 hover:bg-emerald-500/20"
+            }`}
+            title={
+              isDemoMode
+                ? "Click to switch to a Clean Personal Profile"
+                : "Click to switch to Sample Demo Data (Amina M.)"
+            }
+          >
+            {isDemoMode ? (
+              <>
+                <Sparkles size={13} className="text-amber-600" />
+                <span className="hidden sm:inline">Demo (Filled)</span>
+                <span className="sm:hidden">Demo</span>
+              </>
+            ) : (
+              <>
+                <User size={13} className="text-emerald-600" />
+                <span className="hidden sm:inline">New Profile</span>
+                <span className="sm:hidden">New</span>
+              </>
+            )}
+          </button>
+
           {/* Cloud Sync & Backup Trigger */}
           <Button
             variant="iosTinted"
@@ -752,12 +912,38 @@ export default function HomePage() {
       <div className="desktop-grid" id="top">
         {/* Sidebar Nav */}
         <aside className="side-nav" aria-label="Primary navigation">
-          <div className="worker-card">
-            <div className="worker-avatar">AM</div>
+          <div
+            className="worker-card cursor-pointer hover:opacity-90 transition-opacity"
+            onClick={() => setIsProfileModalOpen(true)}
+            title="Edit worker profile"
+          >
+            <div className="worker-avatar">{workerInitials}</div>
             <div>
-              <strong>Amina M.</strong>
-              <span>Construction & Casual · Nairobi</span>
+              <strong>{workerProfile?.name || "Set Your Name"}</strong>
+              <span>{SECTOR_CONFIGS[form.sector]?.name || "Casual Worker"} · {workerProfile?.county || "Kenya"}</span>
             </div>
+          </div>
+
+          {/* Quick Profile Mode Switcher in Sidebar */}
+          <div className="pb-3 pt-1">
+            <button
+              type="button"
+              onClick={toggleProfileMode}
+              className={`w-full py-2 px-3 rounded-2xl text-[11px] font-semibold flex items-center justify-between border shadow-xs transition-all cursor-pointer ${
+                isDemoMode
+                  ? "bg-amber-50/90 text-amber-900 border-amber-200 hover:bg-amber-100"
+                  : "bg-emerald-50/90 text-emerald-900 border-emerald-200 hover:bg-emerald-100"
+              }`}
+              title={isDemoMode ? "Currently viewing sample pre-filled data" : "Currently on clean personal profile"}
+            >
+              <span className="flex items-center gap-1.5 truncate">
+                {isDemoMode ? <Sparkles size={13} className="text-amber-600 shrink-0" /> : <User size={13} className="text-emerald-600 shrink-0" />}
+                <span className="truncate">{isDemoMode ? "Viewing Demo (Amina)" : "Clean State"}</span>
+              </span>
+              <span className="underline text-[10px] font-bold text-blue-700 shrink-0 ml-1">
+                {isDemoMode ? "Start New" : "Load Demo"}
+              </span>
+            </button>
           </div>
           <nav>
             {nav.map(([id, Icon, label]) => (
@@ -854,50 +1040,72 @@ export default function HomePage() {
                   </div>
 
                   <div className="ledger full-ledger">
-                    {shifts.map((shift) => {
-                      const item = calculateSectorAudit(
-                        (shift.sector as KenyanSector) || "construction",
-                        shift.agreed,
-                        shift.paid,
-                        shift.start,
-                        shift.end,
-                        shift.sunday
-                      );
-                      const hasProof = shift.evidenceIds && shift.evidenceIds.length > 0;
-
-                      return (
-                        <Button variant="iosPlain" className="ledger-row" key={shift.id}>
-                          <span className="ledger-date">
-                            <b>{new Date(`${shift.date}T12:00:00`).getDate()}</b>
-                            <small>
-                              {new Date(`${shift.date}T12:00:00`)
-                                .toLocaleString("en", { month: "short" })
-                                .toUpperCase()}
-                            </small>
-                          </span>
-                          <span className="ledger-main">
-                            <strong className="flex items-center gap-1.5">
-                              {shift.employer}
-                              {hasProof && (
-                                <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-bold">
-                                  Proof
-                                </span>
-                              )}
-                            </strong>
-                            <small>
-                              {shift.location} · {shift.start}–{shift.end}
-                            </small>
-                          </span>
-                          <span className="ledger-status">
-                            <strong className={item.totalClaim ? "danger" : "paid"}>
-                              {item.totalClaim ? `${money(item.totalClaim)} due` : "Paid in full"}
-                            </strong>
-                            <small>{item.overtimeHours.toFixed(1)} OT hrs</small>
-                          </span>
-                          <ChevronRight />
+                    {shifts.length === 0 ? (
+                      <div className="p-8 text-center rounded-2xl bg-white/80 border border-gray-100 shadow-xs flex flex-col items-center justify-center space-y-3 my-2">
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                          <BriefcaseBusiness size={24} />
+                        </div>
+                        <div className="space-y-1">
+                          <h3 className="text-sm font-bold text-gray-800">No shifts logged yet</h3>
+                          <p className="text-xs text-gray-500 max-w-xs leading-relaxed">
+                            Your encrypted ledger is currently empty. Log your first shift to track hours, overtime, and statutory claims.
+                          </p>
+                        </div>
+                        <Button
+                          variant="iosTinted"
+                          size="sm"
+                          onClick={() => setActive("home")}
+                          className="text-xs font-semibold text-emerald-700 bg-emerald-100/80 hover:bg-emerald-200/80 mt-1"
+                        >
+                          <Plus size={14} /> Log First Shift
                         </Button>
-                      );
-                    })}
+                      </div>
+                    ) : (
+                      shifts.map((shift) => {
+                        const item = calculateSectorAudit(
+                          (shift.sector as KenyanSector) || "construction",
+                          shift.agreed,
+                          shift.paid,
+                          shift.start,
+                          shift.end,
+                          shift.sunday
+                        );
+                        const hasProof = shift.evidenceIds && shift.evidenceIds.length > 0;
+
+                        return (
+                          <Button variant="iosPlain" className="ledger-row" key={shift.id}>
+                            <span className="ledger-date">
+                              <b>{new Date(`${shift.date}T12:00:00`).getDate()}</b>
+                              <small>
+                                {new Date(`${shift.date}T12:00:00`)
+                                  .toLocaleString("en", { month: "short" })
+                                  .toUpperCase()}
+                              </small>
+                            </span>
+                            <span className="ledger-main">
+                              <strong className="flex items-center gap-1.5">
+                                {shift.employer}
+                                {hasProof && (
+                                  <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-bold">
+                                    Proof
+                                  </span>
+                                )}
+                              </strong>
+                              <small>
+                                {shift.location} · {shift.start}–{shift.end}
+                              </small>
+                            </span>
+                            <span className="ledger-status">
+                              <strong className={item.totalClaim ? "danger" : "paid"}>
+                                {item.totalClaim ? `${money(item.totalClaim)} due` : "Paid in full"}
+                              </strong>
+                              <small>{item.overtimeHours.toFixed(1)} OT hrs</small>
+                            </span>
+                            <ChevronRight />
+                          </Button>
+                        );
+                      })
+                    )}
                   </div>
 
                   <Button variant="iosPrimary" className="screen-action" onClick={() => setActive("home")}>
@@ -1091,8 +1299,14 @@ export default function HomePage() {
 
                     <div className="dossier-person">
                       <span>Complainant</span>
-                      <b>Amina M. · Casual Worker</b>
-                      <small>Nairobi, Kenya · Contiguous Work Ledger</small>
+                      <b>
+                        {workerProfile?.name ? `${workerProfile.name} · ` : ""}
+                        {SECTOR_CONFIGS[form.sector]?.name || "Casual Worker"}
+                      </b>
+                      <small>
+                        {workerProfile?.county || "Kenya"}
+                        {workerProfile?.phone ? ` · Tel: ${workerProfile.phone}` : ""} · Contiguous Work Ledger
+                      </small>
                     </div>
 
                     <div className="dossier-total">
@@ -1216,7 +1430,13 @@ export default function HomePage() {
             </div>
             <div className="date-chip">
               <CalendarDays size={18} />
-              <span>Sun, 20 Sep</span>
+              <span>
+                {new Date().toLocaleDateString("en-GB", {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                })}
+              </span>
             </div>
           </div>
 
@@ -1496,42 +1716,56 @@ export default function HomePage() {
               </Button>
             </div>
             <div className="ledger">
-              {shifts.slice(0, 3).map((shift) => {
-                const item = calculateSectorAudit(
-                  (shift.sector as KenyanSector) || "construction",
-                  shift.agreed,
-                  shift.paid,
-                  shift.start,
-                  shift.end,
-                  shift.sunday
-                );
-                return (
-                  <Button variant="iosPlain" className="ledger-row" key={shift.id}>
-                    <span className="ledger-date">
-                      <b>{new Date(`${shift.date}T12:00:00`).getDate()}</b>
-                      <small>
-                        {new Date(`${shift.date}T12:00:00`)
-                          .toLocaleString("en", { month: "short" })
-                          .toUpperCase()}
-                      </small>
-                    </span>
-                    <span className="ledger-main">
-                      <strong>{shift.employer}</strong>
-                      <small>
-                        <MapPin size={13} />
-                        {shift.location} · {shift.start}–{shift.end}
-                      </small>
-                    </span>
-                    <span className="ledger-status">
-                      <strong className={item.totalClaim ? "danger" : "paid"}>
-                        {item.totalClaim ? `${money(item.totalClaim)} due` : "Paid in full"}
-                      </strong>
-                      <small>{item.overtimeHours.toFixed(1)} overtime hrs</small>
-                    </span>
-                    <ChevronRight size={19} />
-                  </Button>
-                );
-              })}
+              {shifts.length === 0 ? (
+                <div className="p-6 text-center rounded-2xl bg-white/80 border border-gray-100 shadow-xs flex flex-col items-center justify-center space-y-2">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <BriefcaseBusiness size={20} />
+                  </div>
+                  <div className="space-y-0.5">
+                    <h3 className="text-xs font-bold text-gray-800">No shifts recorded yet</h3>
+                    <p className="text-[11px] text-gray-500 max-w-xs">
+                      Use the form above to log your shift today. Your records stay encrypted on your device.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                shifts.slice(0, 3).map((shift) => {
+                  const item = calculateSectorAudit(
+                    (shift.sector as KenyanSector) || "construction",
+                    shift.agreed,
+                    shift.paid,
+                    shift.start,
+                    shift.end,
+                    shift.sunday
+                  );
+                  return (
+                    <Button variant="iosPlain" className="ledger-row" key={shift.id}>
+                      <span className="ledger-date">
+                        <b>{new Date(`${shift.date}T12:00:00`).getDate()}</b>
+                        <small>
+                          {new Date(`${shift.date}T12:00:00`)
+                            .toLocaleString("en", { month: "short" })
+                            .toUpperCase()}
+                        </small>
+                      </span>
+                      <span className="ledger-main">
+                        <strong>{shift.employer}</strong>
+                        <small>
+                          <MapPin size={13} />
+                          {shift.location} · {shift.start}–{shift.end}
+                        </small>
+                      </span>
+                      <span className="ledger-status">
+                        <strong className={item.totalClaim ? "danger" : "paid"}>
+                          {item.totalClaim ? `${money(item.totalClaim)} due` : "Paid in full"}
+                        </strong>
+                        <small>{item.overtimeHours.toFixed(1)} overtime hrs</small>
+                      </span>
+                      <ChevronRight size={19} />
+                    </Button>
+                  );
+                })
+              )}
             </div>
           </section>
         </section>
@@ -1729,6 +1963,26 @@ export default function HomePage() {
         attachment={selectedAttachmentForViewer}
         isOpen={!!selectedAttachmentForViewer}
         onClose={() => setSelectedAttachmentForViewer(null)}
+      />
+
+      {/* Worker Profile Onboarding / Switcher Modal */}
+      <WorkerProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        profile={workerProfile}
+        isFirstVisit={isFirstVisit}
+        isDemoMode={isDemoMode}
+        onToggleMode={toggleProfileMode}
+        onProfileSaved={(saved) => {
+          setWorkerProfile(saved);
+          setIsDemoMode(false);
+          setIsFirstVisit(false);
+          window.localStorage.setItem("fairwork-profile-mode", "clean");
+          if (saved.sector) {
+            setForm((prev) => ({ ...prev, sector: saved.sector as KenyanSector }));
+          }
+          showToast(`Profile updated: ${saved.name}`);
+        }}
       />
     </main>
   );
