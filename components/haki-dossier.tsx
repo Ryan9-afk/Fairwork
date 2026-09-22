@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Download, ExternalLink, FileText, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { calculateSectorAudit, KenyanSector } from "@/lib/legal-engine";
 import type { EvidenceAttachment, StoredIncident, StoredShift, WorkerProfile } from "@/lib/vault-db";
+import type { WorkArrangement } from "@/lib/work-arrangements";
 
 const money = (value: number) => `KSh ${Math.round(value).toLocaleString("en-KE")}`;
 
@@ -14,14 +15,43 @@ interface HakiDossierProps {
   evidence: EvidenceAttachment[];
   profile: WorkerProfile | null;
   isDemoMode: boolean;
+  arrangements?: WorkArrangement[];
   onOpenEvidence: (attachment: EvidenceAttachment) => void;
 }
 
-export function HakiDossier({ shifts, incidents, evidence, profile, isDemoMode, onOpenEvidence }: HakiDossierProps) {
+export function HakiDossier({ shifts, incidents, evidence, profile, isDemoMode, arrangements = [], onOpenEvidence }: HakiDossierProps) {
   const [includePersonal, setIncludePersonal] = useState(true);
   const [selectedShifts, setSelectedShifts] = useState(() => new Set(shifts.map((item) => item.id)));
   const [selectedIncidents, setSelectedIncidents] = useState(() => new Set(incidents.map((item) => item.id)));
   const [selectedEvidence, setSelectedEvidence] = useState(() => new Set(evidence.map((item) => item.id)));
+  const knownIds = useRef({ shifts: new Set<number>(), incidents: new Set<number>(), evidence: new Set<string>() });
+
+  useEffect(() => {
+    const previous = knownIds.current;
+    setSelectedShifts((current) => {
+      const next = new Set(current);
+      shifts.forEach((item) => { if (!previous.shifts.has(item.id)) next.add(item.id); });
+      return next;
+    });
+    setSelectedIncidents((current) => {
+      const next = new Set(current);
+      incidents.forEach((item) => { if (!previous.incidents.has(item.id)) next.add(item.id); });
+      return next;
+    });
+    setSelectedEvidence((current) => {
+      const next = new Set(current);
+      evidence.forEach((item) => { if (!previous.evidence.has(item.id)) next.add(item.id); });
+      return next;
+    });
+    knownIds.current = {
+      shifts: new Set(shifts.map((item) => item.id)),
+      incidents: new Set(incidents.map((item) => item.id)),
+      evidence: new Set(evidence.map((item) => item.id)),
+    };
+  }, [shifts, incidents, evidence]);
+
+  const arrangementLabels = useMemo(() => new Map(arrangements.map((item) => [item.id, item.label])), [arrangements]);
+  const arrangementLabel = (id?: string) => id ? arrangementLabels.get(id) || "Work arrangement" : "Existing work";
 
   const chosenShifts = shifts.filter((item) => selectedShifts.has(item.id));
   const chosenIncidents = incidents.filter((item) => selectedIncidents.has(item.id));
@@ -50,8 +80,8 @@ export function HakiDossier({ shifts, incidents, evidence, profile, isDemoMode, 
         <details>
           <summary>Records ({chosenShifts.length + chosenIncidents.length})</summary>
           <div className="dossier-checklist">
-            {shifts.map((item) => <label key={item.id}><input type="checkbox" checked={selectedShifts.has(item.id)} onChange={() => toggle(selectedShifts, item.id, setSelectedShifts)} /> Shift: {item.date} · {item.employer}</label>)}
-            {incidents.map((item) => <label key={item.id}><input type="checkbox" checked={selectedIncidents.has(item.id)} onChange={() => toggle(selectedIncidents, item.id, setSelectedIncidents)} /> Incident: {item.date} · {item.category}</label>)}
+            {shifts.map((item) => <label key={item.id}><input type="checkbox" checked={selectedShifts.has(item.id)} onChange={() => toggle(selectedShifts, item.id, setSelectedShifts)} /> Shift: {item.date} · {item.employer} · {arrangementLabel(item.arrangementId)}</label>)}
+            {incidents.map((item) => <label key={item.id}><input type="checkbox" checked={selectedIncidents.has(item.id)} onChange={() => toggle(selectedIncidents, item.id, setSelectedIncidents)} /> Incident: {item.date} · {item.category} · {arrangementLabel(item.arrangementId)}</label>)}
           </div>
         </details>
         <details>
@@ -84,7 +114,7 @@ export function HakiDossier({ shifts, incidents, evidence, profile, isDemoMode, 
           <h2>Work and payment timeline</h2>
           {audits.length ? audits.map(({ shift, audit }) => (
             <div className="dossier-entry" key={shift.id}>
-              <div><b>{shift.date} · {shift.employer}</b><span>{shift.location} · {shift.start}–{shift.end}</span></div>
+              <div><b>{shift.date} · {shift.employer}</b><span>{arrangementLabel(shift.arrangementId)} · {shift.location} · {shift.start}–{shift.end}</span></div>
               <dl>
                 {audit.lineItems.map((line) => <div key={line.id}><dt>{line.label}{line.kind === "estimate" && <em>Needs review</em>}</dt><dd>{money(line.amount)}</dd><small>{line.explanation}</small></div>)}
               </dl>
@@ -94,7 +124,7 @@ export function HakiDossier({ shifts, incidents, evidence, profile, isDemoMode, 
 
         <section className="dossier-section">
           <h2>Reported incidents</h2>
-          {chosenIncidents.length ? chosenIncidents.map((item) => <div className="dossier-entry" key={item.id}><b>{item.date} · {item.category}</b><p>{item.description}</p></div>) : <p>No incidents selected.</p>}
+          {chosenIncidents.length ? chosenIncidents.map((item) => <div className="dossier-entry" key={item.id}><b>{item.date} · {item.category}</b><span>{arrangementLabel(item.arrangementId)}</span><p>{item.description}</p></div>) : <p>No incidents selected.</p>}
         </section>
 
         <section className="dossier-section">

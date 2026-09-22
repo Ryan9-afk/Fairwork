@@ -378,7 +378,8 @@ export async function saveEvidenceAttachment(
   parentId?: number | string,
   notes?: string,
   vaultKey?: CryptoKey | null,
-  arrangementId?: string
+  arrangementId?: string,
+  persist = true,
 ): Promise<EvidenceAttachment> {
   const arrayBuffer = await file.arrayBuffer();
   const sha256Hash = await computeSha256(arrayBuffer);
@@ -428,14 +429,16 @@ export async function saveEvidenceAttachment(
     arrangementId,
   };
 
-  const db = await openDatabase();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction("evidence", "readwrite");
-    const store = tx.objectStore("evidence");
-    const req = store.put(attachment);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  if (persist) {
+    const db = await openDatabase();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("evidence", "readwrite");
+      const store = tx.objectStore("evidence");
+      const req = store.put(attachment);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }
 
   // Return in-memory instance with active dataUrl for immediate React rendering
   return { ...attachment, dataUrl };

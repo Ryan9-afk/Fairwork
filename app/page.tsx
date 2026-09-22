@@ -193,6 +193,10 @@ const DEMO_ARRANGEMENT: WorkArrangement = {
   updatedAt: "2026-09-20T10:00:00.000Z",
 };
 
+function createRecordId(): number {
+  return Date.now() * 1000 + Math.floor(Math.random() * 1000);
+}
+
 export default function HomePage() {
   const [lang, setLang] = useState<"en" | "sw">("en");
   const [active, setActive] = useState("home");
@@ -233,12 +237,14 @@ export default function HomePage() {
 
   // Attached evidence for current shift being entered
   const [shiftAttachedEvidence, setShiftAttachedEvidence] = useState<EvidenceAttachment[]>([]);
+  const [shiftDraftId, setShiftDraftId] = useState(() => createRecordId());
 
   // Incident Form State
   const [incidentType, setIncidentType] = useState<"injury" | "wages" | "maternity" | "">("");
   const [incidentDate, setIncidentDate] = useState(new Date().toISOString().split("T")[0]);
   const [incidentDescription, setIncidentDescription] = useState("");
   const [incidentAttachedEvidence, setIncidentAttachedEvidence] = useState<EvidenceAttachment[]>([]);
+  const [incidentDraftId, setIncidentDraftId] = useState(() => createRecordId());
 
   // Modals & Drawers
   const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState(false);
@@ -370,10 +376,15 @@ export default function HomePage() {
           setIsVaultLocked(meta.isPinEnabled && !vaultKey);
         }
 
-        // Evidence
-        const dbEvidence = await getAllEvidence();
-        if (isMounted && dbEvidence) {
-          setEvidenceList(dbEvidence);
+        // Demo evidence is intentionally in-memory only. Never hydrate real
+        // vault attachments into the synthetic demo journey.
+        if (isDemo) {
+          if (isMounted) setEvidenceList([]);
+        } else {
+          const dbEvidence = await getAllEvidence();
+          if (isMounted && dbEvidence) {
+            setEvidenceList(dbEvidence);
+          }
         }
 
         // Query param screen
@@ -415,9 +426,10 @@ export default function HomePage() {
 
       const dbIncidents = await getAllIncidents();
       setIncidents(dbIncidents && dbIncidents.length > 0 ? dbIncidents : []);
+      setEvidenceList(await getAllEvidence());
       const arrangements = await getAllWorkArrangements();
       setWorkArrangements(arrangements);
-      setActiveArrangementId(arrangements[0]?.id || null);
+      setActiveArrangementId(arrangements.find((arrangement) => arrangement.id === "legacy-existing-work")?.id || arrangements[0]?.id || null);
 
       setForm({
         employer: "",
@@ -441,6 +453,7 @@ export default function HomePage() {
       setActiveArrangementId(DEMO_ARRANGEMENT.id);
       setShifts(DEMO_SHIFTS.map((shift) => ({ ...shift, arrangementId: DEMO_ARRANGEMENT.id })));
       setIncidents(DEMO_INCIDENTS.map((incident) => ({ ...incident, arrangementId: DEMO_ARRANGEMENT.id })));
+      setEvidenceList([]);
       setForm({
         employer: "Karibu Builders",
         location: "Kilimani",
@@ -728,7 +741,7 @@ export default function HomePage() {
     setIsSavingShift(true);
 
     try {
-    const shiftId = Date.now();
+    const shiftId = shiftDraftId;
     const evidenceIds = shiftAttachedEvidence.map((ev) => ev.id);
 
     let ciphertextPayload = undefined;
@@ -775,6 +788,16 @@ export default function HomePage() {
       paid: isEncrypted ? 0 : next.paid,
     };
 
+    // Demo records are deliberately ephemeral and never touch IndexedDB or
+    // localStorage, so the sample journey cannot overwrite personal data.
+    if (isDemoMode) {
+      setShifts((previous) => [next, ...previous]);
+      setShiftAttachedEvidence([]);
+      setShiftDraftId(createRecordId());
+      showToast("Demo shift kept separate from your real vault");
+      return;
+    }
+
     // Update in-memory state & persist to IndexedDB
     await saveShift(persisted);
     const updated = [next, ...shifts];
@@ -786,6 +809,7 @@ export default function HomePage() {
 
     // Clear attached evidence for this shift
     setShiftAttachedEvidence([]);
+    setShiftDraftId(createRecordId());
     showToast("Shift & payment proof saved to your device");
     } catch {
       showToast("Shift was not saved. Check device storage and try again.");
@@ -801,7 +825,7 @@ export default function HomePage() {
     setIsSavingIncident(true);
 
     try {
-    const incidentId = Date.now();
+    const incidentId = incidentDraftId;
     const evidenceIds = incidentAttachedEvidence.map((ev) => ev.id);
 
     let ciphertextPayload = undefined;
@@ -838,6 +862,16 @@ export default function HomePage() {
       location: isEncrypted ? "[ENCRYPTED]" : undefined,
     };
 
+    if (isDemoMode) {
+      setIncidents((previous) => [nextIncident, ...previous]);
+      setIncidentType("");
+      setIncidentDescription("");
+      setIncidentAttachedEvidence([]);
+      setIncidentDraftId(createRecordId());
+      showToast("Demo incident kept separate from your real vault");
+      return;
+    }
+
     await saveIncident(persistedIncident);
     const updated = [nextIncident, ...incidents];
     setIncidents(updated);
@@ -845,6 +879,7 @@ export default function HomePage() {
     setIncidentType("");
     setIncidentDescription("");
     setIncidentAttachedEvidence([]);
+    setIncidentDraftId(createRecordId());
     showToast("Incident & evidence saved privately in vault");
     } catch {
       showToast("Incident was not saved. Check device storage and try again.");
@@ -1438,6 +1473,7 @@ export default function HomePage() {
                     evidence={evidenceList}
                     profile={workerProfile}
                     isDemoMode={isDemoMode}
+                    arrangements={workArrangements}
                     onOpenEvidence={setSelectedAttachmentForViewer}
                   />
                   <div className="legacy-dossier-content" hidden>
@@ -2067,9 +2103,11 @@ export default function HomePage() {
         isOpen={isEvidenceModalOpen}
         onClose={() => setIsEvidenceModalOpen(false)}
         parentType={evidenceTarget}
+        parentId={evidenceTarget === "shift" ? shiftDraftId : incidentDraftId}
         initialTypeHint="payment"
         vaultKey={vaultKey}
         arrangementId={activeArrangement?.id}
+        isDemoMode={isDemoMode}
         onAttachmentSaved={(saved) => {
           if (evidenceTarget === "shift") {
             setShiftAttachedEvidence((prev) => [...prev, saved]);
@@ -2103,9 +2141,9 @@ export default function HomePage() {
       <FeaturePhoneModal
         isOpen={isFeaturePhoneOpen}
         onClose={() => setIsFeaturePhoneOpen(false)}
-        onShiftLoggedFromUssd={(ussdShift) => {
+        onShiftLoggedFromUssd={async (ussdShift) => {
           const newShift: StoredShift = {
-            id: Date.now(),
+            id: createRecordId(),
             date: new Date().toISOString().split("T")[0],
             employer: ussdShift.employer,
             location: ussdShift.location,
@@ -2118,8 +2156,17 @@ export default function HomePage() {
             arrangementId: activeArrangement?.id,
           };
           setShifts((prev) => [newShift, ...prev]);
-          saveShift(newShift);
-          showToast("Shift logged via USSD gateway *384*2026#");
+          if (isDemoMode) {
+            showToast("Demo USSD shift kept separate from your real vault");
+            return;
+          }
+          try {
+            await saveShift(newShift);
+            showToast("Shift logged via USSD gateway *384*2026#");
+          } catch {
+            setShifts((prev) => prev.filter((shift) => shift.id !== newShift.id));
+            showToast("USSD shift was not saved. Please try again.");
+          }
         }}
       />
 

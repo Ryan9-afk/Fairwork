@@ -9,12 +9,13 @@ import { computeSha256 } from "@/lib/crypto";
 interface EvidenceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  parentId?: number | string;
+  parentId: number | string;
   parentType: "shift" | "incident";
   onAttachmentSaved: (attachment: EvidenceAttachment) => void;
   initialTypeHint?: "payment" | "injury" | "general";
   vaultKey?: CryptoKey | null;
   arrangementId?: string;
+  isDemoMode?: boolean;
 }
 
 export function EvidenceModal({
@@ -26,12 +27,14 @@ export function EvidenceModal({
   initialTypeHint = "payment",
   vaultKey,
   arrangementId,
+  isDemoMode = false,
 }: EvidenceModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [sha256, setSha256] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -40,7 +43,14 @@ export function EvidenceModal({
     const selected = e.target.files?.[0];
     if (!selected) return;
 
+    if (selected.size > 10 * 1024 * 1024) {
+      setError("Files must be 10 MB or smaller.");
+      e.target.value = "";
+      return;
+    }
+
     setFile(selected);
+    setError("");
     setIsProcessing(true);
 
     try {
@@ -73,7 +83,8 @@ export function EvidenceModal({
         parentId,
         notes,
         vaultKey,
-        arrangementId
+        arrangementId,
+        !isDemoMode,
       );
       onAttachmentSaved(saved);
       onClose();
@@ -82,8 +93,10 @@ export function EvidenceModal({
       setPreviewUrl(null);
       setSha256("");
       setNotes("");
+      setError("");
     } catch (err) {
       console.error("Error saving evidence:", err);
+      setError("Evidence was not saved. Please try again.");
     } finally {
       setIsProcessing(false);
     }
@@ -114,7 +127,8 @@ export function EvidenceModal({
           </button>
         </div>
 
-        <div className="py-4 space-y-4">
+          <div className="py-4 space-y-4">
+          {isDemoMode && <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Demo evidence is temporary and will not be written to your real vault.</p>}
           {!previewUrl ? (
             <div
               onClick={() => fileInputRef.current?.click()}
@@ -200,6 +214,7 @@ export function EvidenceModal({
               className="w-full text-xs h-10 px-3 rounded-xl bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
             />
           </div>
+          {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
         </div>
 
         <div className="pt-3 border-t border-gray-100 flex gap-2">
