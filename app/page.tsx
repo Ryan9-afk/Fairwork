@@ -214,6 +214,7 @@ export default function HomePage() {
   const [workerProfile, setWorkerProfile] = useState<WorkerProfile | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isFirstVisit, setIsFirstVisit] = useState(false);
+  const [showFirstRecordPrompt, setShowFirstRecordPrompt] = useState(false);
 
   // Shifts, Incidents, Evidence - Starts completely clean by default
   const [shifts, setShifts] = useState<StoredShift[]>([]);
@@ -511,6 +512,7 @@ export default function HomePage() {
       sector: arrangement.sector,
       employer: arrangement.employerOrClient || previous.employer,
     }));
+    setShowFirstRecordPrompt(true);
     showToast(`${arrangement.label} is ready for new records`);
   }
 
@@ -1677,6 +1679,41 @@ export default function HomePage() {
             disabled={isDemoMode}
             lang={lang}
           />
+
+          {showFirstRecordPrompt && !isDemoMode && (
+            <section className="first-record-panel" aria-labelledby="first-record-heading">
+              <div>
+                <span className="first-record-kicker">NEXT STEP</span>
+                <h2 id="first-record-heading">What would you like to record?</h2>
+                <p>Start with one real event. You can add evidence after it is saved.</p>
+              </div>
+              <div className="first-record-actions">
+                <Button
+                  type="button"
+                  variant="iosPrimary"
+                  onClick={() => {
+                    setShowFirstRecordPrompt(false);
+                    document.querySelector(".shift-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                >
+                  <BriefcaseBusiness size={17} /> Work or payment
+                </Button>
+                <Button
+                  type="button"
+                  variant="iosTinted"
+                  onClick={() => {
+                    setShowFirstRecordPrompt(false);
+                    navigate("incidents");
+                  }}
+                >
+                  <AlertTriangle size={17} /> Concern
+                </Button>
+                <Button type="button" variant="iosPlain" onClick={() => setShowFirstRecordPrompt(false)}>
+                  I’ll do this later
+                </Button>
+              </div>
+            </section>
+          )}
 
           {/* Quick Actions Row */}
           <div className="quick-actions" aria-label="Quick actions">
