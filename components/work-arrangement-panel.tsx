@@ -135,7 +135,17 @@ export function WorkArrangementPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: description.trim(), lang, intent: "setup", sector: draft.sector }),
       });
-      const json = (await response.json()) as { agent?: unknown; result?: unknown } & Record<string, unknown>;
+      const json = (await response.json()) as { agent?: unknown; result?: unknown; fallback?: boolean } & Record<string, unknown>;
+      if (json.fallback) {
+        setSuggestion(null);
+        setSuggestionState("error");
+        setSuggestionError(
+          lang === "sw"
+            ? "Msaidizi wa AI hayapatikani sasa. Hakuna uainishaji uliofanywa; unaweza kuweka mwenyewe."
+            : "AI setup is unavailable right now. Nothing was classified or saved; you can continue manually."
+        );
+        return;
+      }
       const parsed = SectorAgentResultSchema.safeParse(json.agent ?? json.result ?? json);
       if (!response.ok || !parsed.success) throw new Error("The assistant could not return a safe suggestion.");
       setSuggestion(parsed.data);
