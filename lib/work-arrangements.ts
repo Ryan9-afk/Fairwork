@@ -9,6 +9,8 @@ export interface WorkArrangement {
   sector: KenyanSector;
   paymentBasis: PaymentBasis;
   employerOrClient?: string;
+  /** Flexible, worker-confirmed context fields suggested by AI or added manually. */
+  customFields?: Record<string, string>;
   confirmed: boolean;
   createdAt: string;
   updatedAt: string;
@@ -38,6 +40,7 @@ export function createWorkArrangement(input: Partial<WorkArrangement> = {}): Wor
     sector: input.sector || "construction",
     paymentBasis: input.paymentBasis || "unsure",
     employerOrClient: input.employerOrClient,
+    customFields: input.customFields || {},
     confirmed: input.confirmed ?? false,
     createdAt: input.createdAt || now,
     updatedAt: input.updatedAt || now,
@@ -49,6 +52,6 @@ export function routeSectorFromText(text: string): KenyanSector | null {
   if (/construction|builder|foreman|mason|fund[io]|mjengo|site/.test(value)) return "construction";
   if (/farm|agri|tea|harvest|crop|field|shamba|pick/.test(value)) return "agriculture";
   if (/domestic|household|caregiver|nanny|househelp|cleaner|nyumbani/.test(value)) return "domestic";
-  if (/delivery|boda|rider|courier|platform|gig|uber|bolt|glovo|jiji/.test(value)) return "gig_delivery";
+  if (/delivery|boda|rider|courier|platform|gig|errand|runner|uber|bolt|glovo|jiji/.test(value)) return "gig_delivery";
   return null;
 }

@@ -93,6 +93,7 @@ export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<
         sector: arrangement.sector,
         payment_basis: arrangement.paymentBasis,
         employer_or_client: arrangement.employerOrClient || null,
+        custom_fields: arrangement.customFields || {},
         confirmed: arrangement.confirmed,
         created_at: arrangement.createdAt,
         updated_at: arrangement.updatedAt,

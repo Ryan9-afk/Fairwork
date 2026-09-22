@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Edit3,
   Plus,
+  Trash2,
   Sparkles,
   TriangleAlert,
   UserRound,
@@ -44,6 +45,7 @@ type Draft = {
   sector: KenyanSector;
   paymentBasis: PaymentBasis;
   employerOrClient: string;
+  customFields: Record<string, string>;
 };
 
 const EMPTY_DRAFT: Draft = {
@@ -51,6 +53,7 @@ const EMPTY_DRAFT: Draft = {
   sector: "construction",
   paymentBasis: "unsure",
   employerOrClient: "",
+  customFields: {},
 };
 
 function draftFromArrangement(arrangement?: WorkArrangement | null): Draft {
@@ -60,14 +63,62 @@ function draftFromArrangement(arrangement?: WorkArrangement | null): Draft {
     sector: arrangement.sector,
     paymentBasis: arrangement.paymentBasis,
     employerOrClient: arrangement.employerOrClient || "",
+    customFields: arrangement.customFields || {},
   };
+}
+
+const KNOWN_FIELD_KEYS = new Set([
+  "label",
+  "arrangementLabel",
+  "sector",
+  "paymentBasis",
+  "payment_basis",
+  "employerOrClient",
+  "employer",
+  "employerName",
+  "client",
+  "payStructure",
+  "payFrequency",
+]);
+
+function humanizeFieldKey(key: string): string {
+  return key
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/^./, (character) => character.toUpperCase());
+}
+
+function normalizePaymentBasis(value: string): PaymentBasis | null {
+  const normalized = value.toLowerCase().replace(/[^a-z]/g, "");
+  if (normalized.includes("salary") || normalized.includes("monthly")) return "salary";
+  if (normalized.includes("hour")) return "hourly";
+  if (normalized.includes("daily") || normalized.includes("day")) return "daily";
+  if (normalized.includes("project") || normalized.includes("task") || normalized.includes("errand") || normalized.includes("trip")) return "project";
+  if (normalized.includes("mixed") || normalized.includes("various")) return "mixed";
+  return null;
+}
+
+function readSuggestedValue(input: unknown): string {
+  if (typeof input === "string" || typeof input === "number" || typeof input === "boolean") return String(input);
+  if (!input || typeof input !== "object" || Array.isArray(input)) return "";
+  const value = input as Record<string, unknown>;
+  for (const key of ["value", "answer", "text", "content"]) {
+    if (typeof value[key] === "string" || typeof value[key] === "number") return String(value[key]);
+  }
+  return "";
 }
 
 function suggestedDraft(result: SectorAgentResult, fallback: Draft): Draft {
   const fields = result.suggestedFields || {};
-  const value = (key: string) => (typeof fields[key] === "string" ? fields[key] : "");
+  const value = (key: string) => readSuggestedValue(fields[key]);
   const sector = value("sector");
-  const paymentBasis = value("paymentBasis") || value("payment_basis");
+  const paymentBasis = value("paymentBasis") || value("payment_basis") || value("payStructure") || value("payFrequency");
+  const customFields = Object.entries(fields).reduce<Record<string, string>>((accumulator, [key, fieldValue]) => {
+    if (KNOWN_FIELD_KEYS.has(key)) return accumulator;
+    accumulator[key] = readSuggestedValue(fieldValue);
+    return accumulator;
+  }, { ...fallback.customFields });
+  const inferredPaymentBasis = normalizePaymentBasis(paymentBasis);
   return {
     label: value("label") || value("arrangementLabel") || fallback.label || SECTOR_LABELS[result.sector],
     sector: (["construction", "agriculture", "domestic", "gig_delivery"] as string[]).includes(sector)
@@ -75,8 +126,9 @@ function suggestedDraft(result: SectorAgentResult, fallback: Draft): Draft {
       : result.sector,
     paymentBasis: (PAYMENT_BASES as readonly string[]).includes(paymentBasis)
       ? (paymentBasis as PaymentBasis)
-      : fallback.paymentBasis,
-    employerOrClient: value("employerOrClient") || value("employer") || value("client") || fallback.employerOrClient,
+      : inferredPaymentBasis || fallback.paymentBasis,
+    employerOrClient: value("employerOrClient") || value("employer") || value("employerName") || value("client") || fallback.employerOrClient,
+    customFields,
   };
 }
 
@@ -133,7 +185,9 @@ export function WorkArrangementPanel({
       const response = await fetch("/api/ai/work-setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: description.trim(), lang, intent: "setup", sector: draft.sector }),
+        // A new setup has no confirmed sector yet. Let the router use the
+        // worker's description, then show the result for confirmation.
+        body: JSON.stringify({ message: description.trim(), lang, intent: "setup" }),
       });
       const json = (await response.json()) as { agent?: unknown; result?: unknown; fallback?: boolean } & Record<string, unknown>;
       if (json.fallback) {
@@ -163,6 +217,33 @@ export function WorkArrangementPanel({
     setDraft((current) => ({ ...current, paymentBasis: "unsure" }));
   }
 
+  function addCustomField() {
+    const base = "Additional detail";
+    let key = base;
+    let index = 2;
+    while (Object.prototype.hasOwnProperty.call(draft.customFields, key)) {
+      key = `${base} ${index}`;
+      index += 1;
+    }
+    setDraft((current) => ({ ...current, customFields: { ...current.customFields, [key]: "" } }));
+  }
+
+  function renameCustomField(previousKey: string, nextKey: string) {
+    const trimmedKey = nextKey.trim() || previousKey;
+    if (trimmedKey === previousKey || Object.prototype.hasOwnProperty.call(draft.customFields, trimmedKey)) return;
+    const nextFields = { ...draft.customFields };
+    const value = nextFields[previousKey] || "";
+    delete nextFields[previousKey];
+    nextFields[trimmedKey] = value;
+    setDraft((current) => ({ ...current, customFields: nextFields }));
+  }
+
+  function removeCustomField(key: string) {
+    const nextFields = { ...draft.customFields };
+    delete nextFields[key];
+    setDraft((current) => ({ ...current, customFields: nextFields }));
+  }
+
   async function save(event: FormEvent) {
     event.preventDefault();
     const label = draft.label.trim() || SECTOR_LABELS[draft.sector];
@@ -176,6 +257,11 @@ export function WorkArrangementPanel({
         sector: draft.sector,
         paymentBasis: draft.paymentBasis,
         employerOrClient: draft.employerOrClient.trim() || undefined,
+        customFields: Object.fromEntries(
+          Object.entries(draft.customFields)
+            .map(([key, value]) => [key.trim(), value.trim()] as const)
+            .filter(([key, value]) => key && value)
+        ),
         confirmed: true,
       });
       await onSave(arrangement);
@@ -185,6 +271,9 @@ export function WorkArrangementPanel({
       setSaving(false);
     }
   }
+
+  const visibleQuestions = suggestion?.missingQuestions.slice(0, 3) || [];
+  const extraQuestionCount = Math.max(0, (suggestion?.missingQuestions.length || 0) - visibleQuestions.length);
 
   return (
     <section className="arrangement-panel" aria-labelledby="work-arrangements-title">
@@ -242,7 +331,7 @@ export function WorkArrangementPanel({
               {!editingId && (
                 <div className="arrangement-ai-box">
                   <div className="arrangement-ai-heading"><Sparkles size={16} /><strong>Tell us in your own words</strong><span>Optional</span></div>
-                  <p>The assistant suggests context only. Nothing is saved until you confirm it.</p>
+                  <p>One or two sentences is enough. Say what you do, who pays you, how you are paid, and what you want to keep a record of. The assistant fills known fields and asks only what is still useful.</p>
                   <textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="For example: I deliver parcels on a motorbike and receive payouts after platform fees…" maxLength={3000} />
                   <div className="arrangement-ai-footer"><small>{description.length}/3,000</small><Button type="button" variant="iosTinted" onClick={askAssistant} disabled={suggestionState === "loading"}>{suggestionState === "loading" ? "Thinking…" : "Suggest setup"}</Button></div>
                   {suggestionState === "error" && <p className="arrangement-error" role="alert">{suggestionError}</p>}
@@ -252,10 +341,10 @@ export function WorkArrangementPanel({
               {suggestion && (
                 <div className="arrangement-suggestion" aria-live="polite">
                   <div className="arrangement-suggestion-title"><span><Sparkles size={15} /> Suggested context</span><b>{suggestion.confidence} confidence</b></div>
-                  <p>{suggestion.explanation || "Review these fields before saving."}</p>
+                  <p>{suggestion.explanation || "Review the fields below and add only the details that matter."}</p>
                   {suggestion.assumptions.length > 0 && <div className="arrangement-assumptions"><TriangleAlert size={14} /><span>{suggestion.assumptions.join(" ")}</span></div>}
-                  {suggestion.missingQuestions.length > 0 && <small>Still to clarify: {suggestion.missingQuestions.join(" · ")}</small>}
-                  <div className="arrangement-review-actions"><Button type="button" variant="iosPrimary" onClick={() => setSuggestion(null)}><Check size={15} /> Confirm suggestion</Button><Button type="button" variant="iosPlain" onClick={() => setSuggestion(null)}><Edit3 size={15} /> Edit fields</Button><button type="button" onClick={markUnsure}>I’m unsure</button></div>
+                  {visibleQuestions.length > 0 && <div className="arrangement-questions"><strong>Only if you know:</strong><ul>{visibleQuestions.map((question) => <li key={question}>{question}</li>)}</ul>{extraQuestionCount > 0 && <small>{extraQuestionCount} more detail{extraQuestionCount === 1 ? "" : "s"} can be added later.</small>}</div>}
+                  <div className="arrangement-review-actions"><Button type="button" variant="iosPrimary" onClick={() => setSuggestion(null)}><Check size={15} /> Review filled fields</Button><Button type="button" variant="iosPlain" onClick={() => setSuggestion(null)}><Edit3 size={15} /> Edit fields</Button><button type="button" onClick={markUnsure}>I’m unsure</button></div>
                 </div>
               )}
 
@@ -264,6 +353,14 @@ export function WorkArrangementPanel({
                 <label><span>Work sector</span><select value={draft.sector} onChange={(event) => setDraft({ ...draft, sector: event.target.value as KenyanSector })}>{Object.keys(SECTOR_CONFIGS).map((sector) => <option key={sector} value={sector}>{SECTOR_LABELS[sector as KenyanSector]}</option>)}</select></label>
                 <label><span>How are you paid?</span><select value={draft.paymentBasis} onChange={(event) => setDraft({ ...draft, paymentBasis: event.target.value as PaymentBasis })}>{PAYMENT_BASES.map((basis) => <option key={basis} value={basis}>{PAYMENT_BASIS_LABELS[basis]}</option>)}</select></label>
                 <label><span>Employer, client, or platform <i>Optional</i></span><input value={draft.employerOrClient} onChange={(event) => setDraft({ ...draft, employerOrClient: event.target.value })} placeholder="e.g. Employer name or M-Pesa client" /></label>
+                {Object.entries(draft.customFields).map(([key, value]) => (
+                  <div className="arrangement-custom-field" key={key}>
+                    <label><span>Detail name <i>AI-filled · editable</i></span><input defaultValue={key} onBlur={(event) => renameCustomField(key, event.target.value)} /></label>
+                    <label><span>{humanizeFieldKey(key)}</span><input value={value} onChange={(event) => setDraft((current) => ({ ...current, customFields: { ...current.customFields, [key]: event.target.value } }))} placeholder="Add what you know" /></label>
+                    <button type="button" onClick={() => removeCustomField(key)} aria-label={`Remove ${humanizeFieldKey(key)}`}><Trash2 size={14} /></button>
+                  </div>
+                ))}
+                <button type="button" className="arrangement-add-detail" onClick={addCustomField}><Plus size={14} /> Add another detail</button>
               </form>
             </div>
             <footer className="arrangement-modal-footer"><span><UserRound size={14} /> You can change this later</span><div><button type="button" className="arrangement-cancel" onClick={() => setIsOpen(false)}>Cancel</button><Button type="submit" form="arrangement-form" variant="iosPrimary" disabled={saving}>{saving ? "Saving…" : "Confirm and save"}</Button></div></footer>

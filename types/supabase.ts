@@ -151,6 +151,7 @@ export type Database = {
           sector: string
           payment_basis: string
           employer_or_client: string | null
+          custom_fields: Json
           confirmed: boolean
           created_at: string
           updated_at: string
@@ -162,6 +163,7 @@ export type Database = {
           sector?: string
           payment_basis?: string
           employer_or_client?: string | null
+          custom_fields?: Json
           confirmed?: boolean
           created_at?: string
           updated_at?: string
@@ -173,6 +175,7 @@ export type Database = {
           sector?: string
           payment_basis?: string
           employer_or_client?: string | null
+          custom_fields?: Json
           confirmed?: boolean
           created_at?: string
           updated_at?: string

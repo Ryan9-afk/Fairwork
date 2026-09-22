@@ -30,7 +30,7 @@ Read [PRODUCT.md](PRODUCT.md) before changing scope or product claims.
 - English/Kiswahili language toggle for core product copy.
 - Multiple confirmed work arrangements per worker (job/client, sector, payment basis, and employer/platform context).
 - Four config-driven sector specialists behind one server-only DeepSeek router: construction/artisans, agriculture/tea, domestic/care, and gig delivery/boda boda.
-- Confirmation-first AI setup suggestions with assumptions, missing questions, confidence, review status, and source IDs. Suggestions are never saved automatically.
+- Confirmation-first AI setup suggestions with assumptions, up to three high-value missing questions, confidence, review status, and source IDs. The assistant asks for only one or two sentences, avoids restating the worker's message, fills standard fields, and turns unexpected details into editable custom fields. Suggestions are never saved automatically.
 - `/api/ai/chat`, `/api/ai/work-setup`, `/api/ai/concern`, and `/api/ai/document` with Zod validation, request limits, rate limiting, timeout, source allowlisting, and deterministic fallback.
 - Existing IndexedDB records migrate to a stable `legacy-existing-work` arrangement without changing IDs or contents.
 - Query-backed navigation:
@@ -111,7 +111,7 @@ Installed pinned packages:
 
 The Supabase Auth settings endpoint returned HTTP 200 with the configured publishable key. The production Sites environment is at revision 1.
 
-The additive migration `supabase/migrations/20260922000000_work_arrangements.sql` adds `work_arrangements` plus nullable `arrangement_id` fields on shifts, incidents, and evidence. Apply it before testing cloud backup. Existing rows remain valid and are associated locally with `legacy-existing-work`.
+The additive migrations `supabase/migrations/20260922000000_work_arrangements.sql` and `supabase/migrations/20260922000001_work_arrangement_custom_fields.sql` add `work_arrangements`, flexible confirmed `custom_fields`, and nullable `arrangement_id` fields on shifts, incidents, and evidence. Apply both in order before testing cloud backup. Existing rows remain valid and are associated locally with `legacy-existing-work`.
 
 Cloud backup is still explicitly user-triggered. Anonymous auth does not promise device-loss recovery; describe it as backup unless a tested recovery path is added.
 

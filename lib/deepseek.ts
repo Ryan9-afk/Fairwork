@@ -32,6 +32,32 @@ function parseJsonContent(content: string): unknown {
   return JSON.parse(unfenced);
 }
 
+function meaningfulTokens(value: string): Set<string> {
+  return new Set(
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((token) => token.length > 2 && !/^(the|and|you|are|was|were|with|for|from|that|this|your|have|has|they|them|about|into|what|when|where|how)$/.test(token)),
+  );
+}
+
+function isMostlyRestatement(sentence: string, source: string): boolean {
+  const sentenceTokens = meaningfulTokens(sentence);
+  const sourceTokens = meaningfulTokens(source);
+  if (sentenceTokens.size < 6 || sourceTokens.size === 0) return false;
+  let overlap = 0;
+  sentenceTokens.forEach((token) => {
+    if (sourceTokens.has(token)) overlap += 1;
+  });
+  const overlapRatio = overlap / sentenceTokens.size;
+  // Models often lead with “You …” and simply mirror the worker's wording.
+  // Drop that reflective lead even when it contains a useful second clause;
+  // the following sentence can carry the actionable interpretation.
+  if (/^you\b/i.test(sentence.trim()) && overlapRatio >= 0.28) return true;
+  return overlapRatio >= 0.62;
+}
+
 function normalizeModelResult(raw: unknown, request: DeepSeekRequest, sector: KenyanSector): unknown {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
   const value = raw as Record<string, unknown>;
@@ -52,12 +78,24 @@ function normalizeModelResult(raw: unknown, request: DeepSeekRequest, sector: Ke
   }
   const allowedReview = ["confirmed-input", "needs-review", "insufficient-information"] as const;
   const allowedConfidence = ["high", "medium", "low"] as const;
+  const rawExplanation = typeof value.explanation === "string" ? value.explanation.trim() : "";
+  const explanation = rawExplanation
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => !/^(you (described|indicated|said|stated)|this setup is|the suggested fields)/i.test(sentence.trim()))
+    .filter((sentence) => !isMostlyRestatement(sentence, request.message))
+    .slice(0, 2)
+    .join(" ")
+    .slice(0, 420)
+    .trim() || "Review the fields below and add only the details that matter for this work arrangement.";
   return {
     ...value,
     // Routing and intent are application-owned, never model-owned.
     sector,
     intent: request.intent,
     suggestedFields,
+    explanation,
+    missingQuestions: Array.isArray(value.missingQuestions) ? value.missingQuestions.slice(0, 3) : [],
+    assumptions: Array.isArray(value.assumptions) ? value.assumptions.slice(0, 2) : [],
     reviewStatus: allowedReview.includes(value.reviewStatus as (typeof allowedReview)[number])
       ? value.reviewStatus
       : "needs-review",
