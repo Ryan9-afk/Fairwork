@@ -14,7 +14,7 @@
 
 ## 📌 Executive Summary
 
-**Fairwork Pulse** is a mobile-first "Pocket Evidence Wallet" engineered for Kenya's **~15 million informal, casual, and gig workers**—including construction fundis and mjengo casuals, agricultural and tea-estate pickers, domestic caregivers, and app-based delivery riders.
+**Fairwork Pulse** is a mobile-first "Pocket Evidence Wallet" for Kenyan workers across the whole wage spectrum — from salaried office and professional roles to casual, informal, and gig work, including construction fundis and mjengo casuals, agricultural and tea-estate pickers, domestic caregivers, security guards, factory and warehouse staff, and app-based delivery riders.
 
 Because casual workers often lack written contracts or payslips, they are routinely vulnerable to wage withholding, unlawful deductions, unpaid overtime, and uncompensated injuries. **Fairwork Pulse** helps workers keep contemporaneous records they can organize for discussion with an adviser, labour officer, or union representative.
 
@@ -77,7 +77,7 @@ Built for the **Strathmore / iLab Africa Hackathon 2026** (Nairobi, Kenya).
 
 ### 3. Bilingual DeepSeek AI Legal Rights Assistant
 - **Kenya Labour Law Intelligence**: Powered by a server-only DeepSeek client, with structured responses grounded in curated source IDs. The AI explains worker-entered facts; deterministic code remains responsible for payment arithmetic.
-- **Four config-driven specialists**: Construction/artisans, agriculture/tea, domestic/care, and gig delivery/boda boda share one router and response contract. A worker can keep several confirmed work arrangements without being assigned a social or legal class.
+- **One router, many specialists**: 13 worker categories — construction & artisans, agriculture & tea, domestic & care, gig delivery & boda boda, office & professional, retail/hotels & catering, private security, manufacturing & warehousing, general labour & casual, cleaning & facility services, healthcare & care, transport & PSV, and a freeform "other" bucket. The assistant can propose a custom category when none fits, and a worker can keep several confirmed work arrangements without being assigned a social or legal class.
 - **Confirmation-first records**: Setup, concern, and document suggestions show assumptions, missing questions, confidence, and review status before anything is saved.
 - **English & Sheng/Kiswahili Support**: Allows casual workers to ask questions in their preferred language (e.g. *"Mwajiri amekataa kunilipa overtime ya Sunday, nifanye nini?"*).
 - **Graceful Offline Fallback**: If network connectivity drops, the assistant switches to an embedded offline statutory knowledge base without failing.
@@ -93,15 +93,13 @@ Built for the **Strathmore / iLab Africa Hackathon 2026** (Nairobi, Kenya).
 - **Labour Inspector Telemetry**: Gives COTU-K union reps and Sub-County Labour Officers heatmap visibility into systemic wage withholding and safety hotspots.
 
 ### 6. Dynamic Kenyan Legal Rules Engine
-- **Sector-Specific Schedules**:
-  - **Construction & Artisans** (*Ujenzi*) — KSh 1,180/day statutory benchmark
-  - **Agriculture & Tea** (*Kilimo*) — KSh 820/day
-  - **Domestic & Care Workers** (*Wafanyakazi wa Nyumbani*) — KSh 920/day
-  - **Gig Delivery & Boda Boda** (*Usafirishaji*) — KSh 1,250/day
-- **Statutory Audit Calculations**:
-  - Wage shortfalls (Employment Act §§ 17–19)
-  - Daily overtime (1.5× hourly rate for hours over statutory daily threshold)
-  - Sunday and Public Holiday rest-day double time (2.0× hourly rate)
+- **Worker-friendly by design**: the engine does **not** compare pay to a statutory minimum wage. A worker may have freely agreed a different price, so the agreed figure entered is treated as the basis. This avoids telling anyone they were "underpaid" against a benchmark they never agreed to.
+- **Thirteen work categories**: construction & artisans, agriculture & tea, domestic & care, gig delivery & boda boda, office & professional, retail/hotels & catering, private security, manufacturing & warehousing, general labour & casual, cleaning & facility services, healthcare & care, transport & PSV, plus a freeform "other" category the assistant can generate.
+- **Statutory Audit Calculations** (from the worker's own entered figures):
+  - Recorded wage gap (agreed pay minus amount received), never below zero — Employment Act §§ 17–19
+  - Daily overtime (1.5× hourly rate for hours beyond the standard 8-hour day)
+  - Sunday and public-holiday rest-day double time (2.0× hourly rate)
+  - All estimates are clearly marked for review rather than presented as owed amounts.
 
 ### 7. Multi-Channel 2G Feature-Phone (Kitochi) Intake Simulator
 - **USSD Shortcode (`*384*2026#`)**: An interactive 2G USSD session simulator for non-smartphone casual workers.

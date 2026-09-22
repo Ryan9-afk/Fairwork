@@ -23,6 +23,7 @@ import {
   FolderLock,
   HeartPulse,
   Home,
+  KeyRound,
   Languages,
   Lock,
   MapPin,
@@ -947,18 +948,38 @@ export default function HomePage() {
             <small>Welcome back,</small>
             <strong className="flex items-center gap-1.5">
               {workerProfile?.name || "Set Your Name"}
-              {isVaultConfigured && (
-                <span
-                  onClick={(e) => {
+              <span
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsVaultModalOpen(true);
+                }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
                     e.stopPropagation();
                     setIsVaultModalOpen(true);
-                  }}
-                  className={`text-[10px] px-1.5 py-0.2 rounded-md font-semibold flex items-center gap-0.5 cursor-pointer ${isVaultLocked ? "text-amber-800 bg-amber-100 hover:bg-amber-200" : "text-emerald-700 bg-emerald-100/80 hover:bg-emerald-200/80"}`}
-                  title={isVaultLocked ? "Vault locked - click to unlock" : "AES-256 vault active - click to manage"}
-                >
-                  {isVaultLocked ? <Lock size={10} /> : <Unlock size={10} />} {isVaultLocked ? "Locked" : "AES-256"}
-                </span>
-              )}
+                  }
+                }}
+                className={`text-[10px] px-1.5 py-0.2 rounded-md font-semibold flex items-center gap-0.5 cursor-pointer ${
+                  !isVaultConfigured
+                    ? "text-blue-700 bg-blue-100 hover:bg-blue-200"
+                    : isVaultLocked
+                    ? "text-amber-800 bg-amber-100 hover:bg-amber-200"
+                    : "text-emerald-700 bg-emerald-100/80 hover:bg-emerald-200/80"
+                }`}
+                title={
+                  !isVaultConfigured
+                    ? "Set up an encrypted vault PIN"
+                    : isVaultLocked
+                    ? "Vault locked - click to unlock"
+                    : "AES-256 vault active - click to manage"
+                }
+              >
+                {!isVaultConfigured ? <KeyRound size={10} /> : isVaultLocked ? <Lock size={10} /> : <Unlock size={10} />}{" "}
+                {!isVaultConfigured ? "Set PIN" : isVaultLocked ? "Locked" : "AES-256"}
+              </span>
             </strong>
           </span>
         </button>

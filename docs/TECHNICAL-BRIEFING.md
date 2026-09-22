@@ -38,7 +38,7 @@
 
 ## 1. The one-paragraph summary
 
-Fairwork Pulse is a **pocket work-record and evidence wallet**. A person logs what they did and what they were paid. The app calculates what Kenyan statutory rules say they were owed, stores that record **encrypted on their own device**, and lets them attach evidence (M-Pesa messages, receipts, injury cards) whose **digital fingerprint** is recorded so later tampering is detectable. The AI only *explains*; a separate deterministic rules engine does the arithmetic. Cloud backup is optional, and when a PIN is set, the sensitive content is uploaded as ciphertext the server cannot read.
+Fairwork Pulse is a **pocket work-record and evidence wallet**. A person logs what they did and what they were paid. The app calculates the gap between what was agreed and what was actually received, plus an estimate of overtime from the agreed rate; it stores that record **encrypted on their own device**, and lets them attach evidence (M-Pesa messages, receipts, injury cards) whose **digital fingerprint** is recorded so later tampering is detectable. The AI only *explains*; a separate deterministic rules engine does the arithmetic. Cloud backup is optional, and when a PIN is set, the sensitive content is uploaded as ciphertext the server cannot read.
 
 ---
 
@@ -50,9 +50,9 @@ We have **moved beyond "informal workers only."** The product is for anyone who 
 - Casual, gig, domestic, agricultural, and construction workers — the original focus.
 - Anyone preparing to raise a workplace dispute (wage theft, unlawful deductions, injury, discrimination, unfair termination).
 
-> **Note for whoever edits the public materials:** the `README.md` and some in-app copy still describe the product as "for informal workers." If the pitch is now broader, that text needs updating so the story is consistent.
+> **Public materials have been updated** to describe the product across the wage spectrum rather than "informal workers only."
 
-Four supported "sectors" (really, work profiles): **construction & artisans, agriculture & tea, domestic & care, gig delivery & boda boda.**
+Thirteen supported "sectors" (really, work profiles): **construction & artisans, agriculture & tea, domestic & care, gig delivery & boda boda, office & professional, retail/hotels & catering, private security, manufacturing & warehousing, general labour & casual, cleaning & facility services, healthcare & care, transport & PSV**, plus a freeform **"other"** bucket the assistant can use when nothing fits (the specific name is stored on the arrangement).
 
 ---
 
@@ -222,7 +222,9 @@ For each shift it computes:
   - **1.5×** on a normal day.
   - **2.0×** on a Sunday or public holiday.
 - **Total indicated claim** = wage deficit + overtime pay due.
-- Flags if agreed pay is below the sector baseline, and marks items **"needs review"** vs **"recorded."**
+- Marks line items **"recorded"** vs **"needs review."**
+
+**No minimum-wage comparison is applied.** The engine does not check pay against a statutory minimum, because a worker may have freely agreed a different price. The agreed figure entered is the basis, and each overtime figure is labelled an estimate for human review.
 
 It also handles **cross-midnight shifts** (e.g. 20:00–04:00).
 
@@ -291,8 +293,8 @@ The **union/regulator dashboard** shows regional hotspot trends for labour offic
 
 Being upfront about these builds credibility and protects the team in Q&A.
 
-1. **PIN creation is not reachable from the UI.** The setup flow and encryption code exist (`VaultLockModal`, `handleSetupPin`), but the only button that opens the vault modal is shown *only after* a PIN is already configured. In practice, a new user cannot start encryption from the interface. **This should be fixed before the demo** (add a visible "Set up security PIN" entry point).
-2. **Statutory figures are inconsistent.** `README.md` lists daily baselines of KSh 1,180 / 820 / 920 / 1,250; `lib/legal-engine.ts` uses 1,200 / 950 / 650 / 1,100. One must be chosen and cited (with the applicable wage order and date).
+1. **PIN creation is now reachable** — a visible **"Set PIN"** chip in the header opens the vault setup (previously it was hidden until a PIN already existed).
+2. **Minimum-wage comparison was removed by design.** The engine reports only the agreed-vs-paid gap and overtime from the entered rate; it deliberately does not assert a statutory minimum. Overtime remains an estimate that needs human review.
 3. **Deployments can go stale.** The live site was previously 11 commits behind, so its CSS did not match the code. Always confirm the deployed commit.
 4. **No test coverage existed until recently**; we have now added unit tests for the rules engine, crypto, routing, and the AI fallback.
 5. **Anonymous sign-in** is used for the demo; production needs real identity, consent, and a data-protection review.
@@ -346,4 +348,4 @@ Keep it to one worker's story: *record → calculate → preserve → share → 
 
 ---
 
-*This document describes a prototype. Statutory figures and citations must be verified against the current wage orders before any public or legal use. The tool organises worker-provided information; it does not determine liability, guarantee admissibility, or replace legal advice.*
+*This document describes a prototype. Statutory citations must be verified against the current law before any public or legal use. The tool organises worker-provided information; it does not determine liability, guarantee admissibility, or replace legal advice.*
