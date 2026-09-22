@@ -147,6 +147,7 @@ export function WorkArrangementPanel({
   const [suggestion, setSuggestion] = useState<SectorAgentResult | null>(null);
   const [suggestionState, setSuggestionState] = useState<"idle" | "loading" | "error">("idle");
   const [suggestionError, setSuggestionError] = useState("");
+  const [followUpAnswers, setFollowUpAnswers] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   const active = useMemo(
@@ -161,6 +162,7 @@ export function WorkArrangementPanel({
     setSuggestion(null);
     setSuggestionState("idle");
     setSuggestionError("");
+    setFollowUpAnswers({});
     setIsOpen(true);
   }
 
@@ -171,6 +173,7 @@ export function WorkArrangementPanel({
     setSuggestion(null);
     setSuggestionState("idle");
     setSuggestionError("");
+    setFollowUpAnswers({});
     setIsOpen(true);
   }
 
@@ -204,6 +207,7 @@ export function WorkArrangementPanel({
       if (!response.ok || !parsed.success) throw new Error("The assistant could not return a safe suggestion.");
       setSuggestion(parsed.data);
       setDraft(suggestedDraft(parsed.data, draft));
+      setFollowUpAnswers({});
       setSuggestionState("idle");
     } catch {
       setSuggestionState("error");
@@ -250,6 +254,11 @@ export function WorkArrangementPanel({
     setSaving(true);
     try {
       const existing = editingId ? arrangements.find((arrangement) => arrangement.id === editingId) : undefined;
+      const answeredFollowUps = Object.fromEntries(
+        Object.entries(followUpAnswers)
+          .map(([question, answer]) => [`Answer: ${question}`, answer.trim()] as const)
+          .filter(([, answer]) => answer)
+      );
       const arrangement = createWorkArrangement({
         ...existing,
         id: existing?.id,
@@ -264,6 +273,7 @@ export function WorkArrangementPanel({
         ),
         confirmed: true,
       });
+      arrangement.customFields = { ...arrangement.customFields, ...answeredFollowUps };
       await onSave(arrangement);
       onSelect(arrangement.id);
       setIsOpen(false);
@@ -343,7 +353,7 @@ export function WorkArrangementPanel({
                   <div className="arrangement-suggestion-title"><span><Sparkles size={15} /> Suggested context</span><b>{suggestion.confidence} confidence</b></div>
                   <p>{suggestion.explanation || "Review the fields below and add only the details that matter."}</p>
                   {suggestion.assumptions.length > 0 && <div className="arrangement-assumptions"><TriangleAlert size={14} /><span>{suggestion.assumptions.join(" ")}</span></div>}
-                  {visibleQuestions.length > 0 && <div className="arrangement-questions"><strong>Only if you know:</strong><ul>{visibleQuestions.map((question) => <li key={question}>{question}</li>)}</ul>{extraQuestionCount > 0 && <small>{extraQuestionCount} more detail{extraQuestionCount === 1 ? "" : "s"} can be added later.</small>}</div>}
+                  {visibleQuestions.length > 0 && <div className="arrangement-questions"><div className="arrangement-questions-heading"><strong>Only if you know</strong><span>Answer below or leave blank. You can add it later.</span></div>{visibleQuestions.map((question) => <label key={question}><span>{question}<i>Optional</i></span><input value={followUpAnswers[question] || ""} onChange={(event) => setFollowUpAnswers((current) => ({ ...current, [question]: event.target.value }))} placeholder="Add what you know" /></label>)}{extraQuestionCount > 0 && <small>{extraQuestionCount} more detail{extraQuestionCount === 1 ? "" : "s"} can be added later.</small>}</div>}
                   <div className="arrangement-review-actions"><Button type="button" variant="iosPrimary" onClick={() => setSuggestion(null)}><Check size={15} /> Review filled fields</Button><Button type="button" variant="iosPlain" onClick={() => setSuggestion(null)}><Edit3 size={15} /> Edit fields</Button><button type="button" onClick={markUnsure}>I’m unsure</button></div>
                 </div>
               )}
