@@ -298,7 +298,7 @@ Being upfront about these builds credibility and protects the team in Q&A.
 3. **Deployments can go stale.** The live site was previously 11 commits behind, so its CSS did not match the code. Always confirm the deployed commit.
 4. **No test coverage existed until recently**; we have now added unit tests for the rules engine, crypto, routing, and the AI fallback.
 5. **Anonymous sign-in** is used for the demo; production needs real identity, consent, and a data-protection review.
-6. **Losing the PIN means losing access.** That is the cost of zero-knowledge; a recovery design is a policy decision to discuss.
+6. **Losing the PIN — or the phone — means losing access.** That is the cost of zero-knowledge; accounts plus a recovery phrase are the next milestone (see section 16).
 
 ---
 
@@ -328,6 +328,7 @@ Being upfront about these builds credibility and protects the team in Q&A.
 
 - **"Can you read my wages?"** → With a PIN, no — that content is ciphertext and we never hold the key. We can see operational metadata (name, dates, sector).
 - **"What if the worker loses the PIN?"** → The key is unrecoverable by design; recovery is a policy question we are happy to discuss.
+- **"What if the worker loses the phone?"** → Today the encrypted records would be unrecoverable — that is the zero-knowledge tradeoff. Accounts plus a recovery phrase (roadmap) make the record portable without ever handing the key to the server.
 - **"Can you prove a photo wasn't edited?"** → We can prove it hasn't changed *since hash capture*. We cannot prove pre-capture provenance.
 - **"Why not blockchain?"** → A hash (and optionally a hash chain) gives tamper-evidence without tokens, cost, or dependence on a third-party chain.
 - **"Is the AI giving legal advice?"** → No. It explains, cites an allow-listed source register, and never decides. The arithmetic is deterministic code.
@@ -345,6 +346,33 @@ Being upfront about these builds credibility and protects the team in Q&A.
 5. Close with the **union/regulator** aggregate view (clearly labelled illustrative) and the **feature-phone** channel.
 
 Keep it to one worker's story: *record → calculate → preserve → share → aggregate.*
+
+---
+
+## 16. How we take this further (closing slide)
+
+Use this **after** the demo, as the final slide. Rule: sequence it, tie each item to something already built, and turn each known limitation into a roadmap line. Keep it to 3–5 items, about 30–60 seconds. Do not lead with it, and do not promise anything that contradicts the working demo.
+
+**Near term (weeks)**
+
+1. **Accounts + recovery phrase** — a stable identity (email/phone OTP) and a recovery phrase that wraps the vault key, so a lost phone no longer means a lost record. Only the *wrapped* key and salt reach the server; the phrase never does. *(Turns today's lost-phone limitation into the next milestone.)*
+2. **Export & portability** — one-tap encrypted backup plus PDF/CSV/JSON export, so the record outlives the app and can go straight into a dispute.
+3. **Real feature-phone channel** — move the USSD/WhatsApp simulator to a live telco/BSP integration for genuine reach beyond smartphones.
+
+**At scale**
+
+4. **Consented, anonymised aggregates** — give unions and labour officers the regional trends view, built on explicit consent and a privacy review.
+5. **Sustainability** — who pays: unions, NGOs, county governments, insurers, or employers for compliance, with a free tier for individual workers.
+
+**One-line framing:** *"We built the hard part first — client-side encrypted evidence and deterministic statutory math. Next is making it portable and recoverable: accounts, a recovery phrase, and export."*
+
+**Slide outline (5 bullets)**
+
+- Where we are: encrypted device vault + deterministic wage audit + SHA-256 evidence integrity.
+- Next: **accounts + recovery phrase** — a career-long record, not a device-bound one.
+- Next: **export/portability** — the record outlives the app.
+- Next: **real WhatsApp/USSD** + consented union/regulator aggregates.
+- Sustainable at scale: unions, NGOs, counties, insurers, employer compliance.
 
 ---
 
