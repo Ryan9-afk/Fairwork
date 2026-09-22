@@ -1,4 +1,5 @@
 import { buildSectorSystemPrompt, getSectorAgentConfig } from "@/lib/sector-agents";
+import type { KenyanSector } from "@/lib/legal-engine";
 import { SectorAgentResultSchema, type DeepSeekRequest, type SectorAgentResult } from "@/lib/ai-contracts";
 import { routeSectorFromText } from "@/lib/work-arrangements";
 
@@ -31,6 +32,41 @@ function parseJsonContent(content: string): unknown {
   return JSON.parse(unfenced);
 }
 
+function normalizeModelResult(raw: unknown, request: DeepSeekRequest, sector: KenyanSector): unknown {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const value = raw as Record<string, unknown>;
+  const fields = value.suggestedFields;
+  let suggestedFields: Record<string, unknown> = {};
+  if (fields && typeof fields === "object" && !Array.isArray(fields)) {
+    suggestedFields = fields as Record<string, unknown>;
+  } else if (Array.isArray(fields)) {
+    fields.forEach((item, index) => {
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        const entry = item as Record<string, unknown>;
+        const key = typeof entry.field === "string" ? entry.field : typeof entry.name === "string" ? entry.name : `field${index + 1}`;
+        suggestedFields[key] = entry.value ?? entry.answer ?? entry;
+      } else {
+        suggestedFields[`field${index + 1}`] = item;
+      }
+    });
+  }
+  const allowedReview = ["confirmed-input", "needs-review", "insufficient-information"] as const;
+  const allowedConfidence = ["high", "medium", "low"] as const;
+  return {
+    ...value,
+    // Routing and intent are application-owned, never model-owned.
+    sector,
+    intent: request.intent,
+    suggestedFields,
+    reviewStatus: allowedReview.includes(value.reviewStatus as (typeof allowedReview)[number])
+      ? value.reviewStatus
+      : "needs-review",
+    confidence: allowedConfidence.includes(value.confidence as (typeof allowedConfidence)[number])
+      ? value.confidence
+      : "medium",
+  };
+}
+
 export async function runDeepSeekAgent(request: DeepSeekRequest): Promise<{ result: SectorAgentResult; fallback: boolean }> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey || apiKey === "your_deepseek_api_key_here") {
@@ -49,6 +85,7 @@ export async function runDeepSeekAgent(request: DeepSeekRequest): Promise<{ resu
   ].join("\n");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
+  let failureReason = "unknown";
 
   try {
     const response = await fetch(DEEPSEEK_URL, {
@@ -70,12 +107,28 @@ export async function runDeepSeekAgent(request: DeepSeekRequest): Promise<{ resu
       signal: controller.signal,
     });
 
-    if (!response.ok) throw new DeepSeekUnavailableError("DeepSeek returned an upstream error");
+    if (!response.ok) {
+      failureReason = `upstream-${response.status}`;
+      throw new DeepSeekUnavailableError("DeepSeek returned an upstream error");
+    }
     const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
     const content = payload.choices?.[0]?.message?.content;
-    if (!content) throw new DeepSeekUnavailableError("DeepSeek returned no content");
-    const parsed = SectorAgentResultSchema.safeParse(parseJsonContent(content));
-    if (!parsed.success) throw new DeepSeekUnavailableError("DeepSeek response did not match the sector schema");
+    if (!content) {
+      failureReason = "empty-content";
+      throw new DeepSeekUnavailableError("DeepSeek returned no content");
+    }
+    let parsedContent: unknown;
+    try {
+      parsedContent = parseJsonContent(content);
+    } catch {
+      failureReason = "invalid-json";
+      throw new DeepSeekUnavailableError("DeepSeek response was not valid JSON");
+    }
+    const parsed = SectorAgentResultSchema.safeParse(normalizeModelResult(parsedContent, request, sector));
+    if (!parsed.success) {
+      failureReason = `schema-mismatch:${parsed.error.issues.map((issue) => issue.path.join(".") + "=" + issue.message).join(",").slice(0, 240)}`;
+      throw new DeepSeekUnavailableError("DeepSeek response did not match the sector schema");
+    }
     const allowedSources = new Set(getSectorAgentConfig(sector).sourceIds);
     return {
       result: {
@@ -89,7 +142,7 @@ export async function runDeepSeekAgent(request: DeepSeekRequest): Promise<{ resu
       fallback: false,
     };
   } catch {
-    console.warn("DeepSeek request failed; using local fallback.");
+    console.warn(`DeepSeek request failed (${failureReason}); using local fallback.`);
     return { result: fallbackResult(request), fallback: true };
   } finally {
     clearTimeout(timeout);
