@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       evidence_files: {
         Row: {
+          arrangement_id: string | null
           created_at: string
           file_name: string
           file_size: number
@@ -31,6 +32,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          arrangement_id?: string | null
           created_at?: string
           file_name: string
           file_size: number
@@ -46,6 +48,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          arrangement_id?: string | null
           created_at?: string
           file_name?: string
           file_size?: number
@@ -64,6 +67,7 @@ export type Database = {
       }
       incidents: {
         Row: {
+          arrangement_id: string | null
           category: string
           ciphertext_payload: Json | null
           client_id: string | null
@@ -78,6 +82,7 @@ export type Database = {
           witnesses: string | null
         }
         Insert: {
+          arrangement_id?: string | null
           category: string
           ciphertext_payload?: Json | null
           client_id?: string | null
@@ -92,6 +97,7 @@ export type Database = {
           witnesses?: string | null
         }
         Update: {
+          arrangement_id?: string | null
           category?: string
           ciphertext_payload?: Json | null
           client_id?: string | null
@@ -137,8 +143,45 @@ export type Database = {
         }
         Relationships: []
       }
+      work_arrangements: {
+        Row: {
+          user_id: string
+          id: string
+          label: string
+          sector: string
+          payment_basis: string
+          employer_or_client: string | null
+          confirmed: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          id: string
+          label: string
+          sector?: string
+          payment_basis?: string
+          employer_or_client?: string | null
+          confirmed?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          id?: string
+          label?: string
+          sector?: string
+          payment_basis?: string
+          employer_or_client?: string | null
+          confirmed?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       shifts: {
         Row: {
+          arrangement_id: string | null
           agreed_pay: number | null
           amount_paid: number | null
           ciphertext_payload: Json | null
@@ -157,6 +200,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          arrangement_id?: string | null
           agreed_pay?: number | null
           amount_paid?: number | null
           ciphertext_payload?: Json | null
@@ -175,6 +219,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          arrangement_id?: string | null
           agreed_pay?: number | null
           amount_paid?: number | null
           ciphertext_payload?: Json | null

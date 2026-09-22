@@ -6,6 +6,7 @@
  */
 
 import { computeSha256, encryptString, decryptString } from "./crypto";
+import type { WorkArrangement } from "./work-arrangements";
 
 export interface EvidenceAttachment {
   id: string;
@@ -21,6 +22,7 @@ export interface EvidenceAttachment {
   notes?: string;
   isEncrypted?: boolean;
   ciphertextPayload?: { ciphertext: string; iv: string };
+  arrangementId?: string;
 }
 
 export interface StoredShift {
@@ -35,6 +37,7 @@ export interface StoredShift {
   sunday: boolean;
   sector?: string;
   evidenceIds?: string[];
+  arrangementId?: string;
   ciphertextPayload?: { ciphertext: string; iv: string };
   isEncrypted?: boolean;
 }
@@ -52,6 +55,7 @@ export interface StoredIncident {
   ciphertextPayload?: { ciphertext: string; iv: string };
   isEncrypted?: boolean;
   createdAt: string;
+  arrangementId?: string;
 }
 
 export interface VaultMetadata {
@@ -69,10 +73,11 @@ export interface WorkerProfile {
   county?: string;
   sector?: string;
   updatedAt: string;
+  arrangementId?: string;
 }
 
 const DB_NAME = "fairwork_pulse_vault_v1";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -111,10 +116,116 @@ function openDatabase(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains("worker_profile")) {
         db.createObjectStore("worker_profile", { keyPath: "id" });
       }
+
+      if (!db.objectStoreNames.contains("work_arrangements")) {
+        const arrangementStore = db.createObjectStore("work_arrangements", { keyPath: "id" });
+        arrangementStore.createIndex("sector", "sector", { unique: false });
+        arrangementStore.createIndex("updatedAt", "updatedAt", { unique: false });
+      }
     };
 
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
+  });
+}
+
+const LEGACY_ARRANGEMENT_ID = "legacy-existing-work";
+
+export async function getAllWorkArrangements(): Promise<WorkArrangement[]> {
+  const db = await openDatabase();
+  const arrangements = await new Promise<WorkArrangement[]>((resolve, reject) => {
+    const req = db.transaction("work_arrangements", "readonly").objectStore("work_arrangements").getAll();
+    req.onsuccess = () => resolve((req.result as WorkArrangement[]) || []);
+    req.onerror = () => reject(req.error);
+  });
+  let resolved = arrangements;
+  if (!resolved.some((item) => item.id === LEGACY_ARRANGEMENT_ID)) {
+    const now = new Date().toISOString();
+    const legacy: WorkArrangement = {
+      id: LEGACY_ARRANGEMENT_ID,
+      label: "Existing work",
+      sector: "construction",
+      paymentBasis: "unsure",
+      confirmed: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await saveWorkArrangement(legacy);
+    resolved = [legacy, ...resolved];
+  }
+
+  // Records created before work arrangements were introduced keep their original
+  // IDs and content. They are only given a stable context identifier so they can
+  // participate in the same dossier/sync flow as new records.
+  await migrateRecordsToArrangement(LEGACY_ARRANGEMENT_ID);
+  return resolved.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+async function migrateRecordsToArrangement(arrangementId: string): Promise<void> {
+  const db = await openDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(["shifts", "incidents", "evidence"], "readwrite");
+    const shifts = tx.objectStore("shifts");
+    const incidents = tx.objectStore("incidents");
+    const evidence = tx.objectStore("evidence");
+    const shiftById = new Map<number, string>();
+    const incidentById = new Map<number, string>();
+    const shiftRequest = shifts.getAll();
+    const incidentRequest = incidents.getAll();
+    const evidenceRequest = evidence.getAll();
+
+    let completed = 0;
+    const finish = () => {
+      completed += 1;
+      if (completed !== 3) return;
+
+      for (const raw of (shiftRequest.result as StoredShift[]) || []) {
+        const value = { ...raw, arrangementId: raw.arrangementId || arrangementId };
+        shiftById.set(value.id, value.arrangementId!);
+        if (!raw.arrangementId) shifts.put(value);
+      }
+      for (const raw of (incidentRequest.result as StoredIncident[]) || []) {
+        const value = { ...raw, arrangementId: raw.arrangementId || arrangementId };
+        incidentById.set(value.id, value.arrangementId!);
+        if (!raw.arrangementId) incidents.put(value);
+      }
+      for (const raw of (evidenceRequest.result as EvidenceAttachment[]) || []) {
+        if (raw.arrangementId) continue;
+        const parentMap = raw.parentType === "shift" ? shiftById : incidentById;
+        evidence.put({
+          ...raw,
+          arrangementId: parentMap.get(Number(raw.parentId)) || arrangementId,
+        });
+      }
+    };
+    shiftRequest.onsuccess = finish;
+    incidentRequest.onsuccess = finish;
+    evidenceRequest.onsuccess = finish;
+    shiftRequest.onerror = () => reject(shiftRequest.error);
+    incidentRequest.onerror = () => reject(incidentRequest.error);
+    evidenceRequest.onerror = () => reject(evidenceRequest.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error("Record migration aborted"));
+  });
+}
+
+export async function saveWorkArrangement(arrangement: WorkArrangement): Promise<void> {
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction("work_arrangements", "readwrite").objectStore("work_arrangements").put(arrangement);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function deleteWorkArrangement(id: string): Promise<void> {
+  if (id === LEGACY_ARRANGEMENT_ID) return;
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction("work_arrangements", "readwrite").objectStore("work_arrangements").delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
   });
 }
 
@@ -266,7 +377,8 @@ export async function saveEvidenceAttachment(
   parentType: "shift" | "incident",
   parentId?: number | string,
   notes?: string,
-  vaultKey?: CryptoKey | null
+  vaultKey?: CryptoKey | null,
+  arrangementId?: string
 ): Promise<EvidenceAttachment> {
   const arrayBuffer = await file.arrayBuffer();
   const sha256Hash = await computeSha256(arrayBuffer);
@@ -313,6 +425,7 @@ export async function saveEvidenceAttachment(
     notes,
     isEncrypted,
     ciphertextPayload,
+    arrangementId,
   };
 
   const db = await openDatabase();

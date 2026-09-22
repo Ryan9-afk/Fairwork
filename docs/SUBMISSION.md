@@ -34,7 +34,7 @@ Worker recordkeeping remains free. The team will test whether labour-support ins
 
 ## Technical summary
 
-Next.js, React, TypeScript, IndexedDB, Web Crypto AES-GCM, SHA-256, Supabase PostgreSQL/Storage with row-level security, and an optional Gemini rights-information assistant. Calculation rules remain deterministic and separate from AI responses.
+Next.js, React, TypeScript, IndexedDB, Web Crypto AES-GCM, SHA-256, Supabase PostgreSQL/Storage with row-level security, and an optional server-only DeepSeek rights-information assistant. Calculation rules remain deterministic and separate from AI responses.
 
 ## Submission checklist
 

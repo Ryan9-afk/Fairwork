@@ -61,7 +61,10 @@ import {
   StoredShift,
   StoredIncident,
   EvidenceAttachment,
+  getAllWorkArrangements,
+  saveWorkArrangement,
 } from "@/lib/vault-db";
+import { WorkArrangement } from "@/lib/work-arrangements";
 import {
   deriveKeyFromPin,
   encryptData,
@@ -85,6 +88,7 @@ import { CloudSyncModal } from "@/components/cloud-sync-modal";
 import { ImageViewerModal } from "@/components/image-viewer-modal";
 import { WorkerProfileModal } from "@/components/worker-profile-modal";
 import { HakiDossier } from "@/components/haki-dossier";
+import { WorkArrangementPanel } from "@/components/work-arrangement-panel";
 
 const copy = {
   en: {
@@ -178,6 +182,17 @@ const DEMO_INCIDENTS: StoredIncident[] = [
   },
 ];
 
+const DEMO_ARRANGEMENT: WorkArrangement = {
+  id: "demo-construction",
+  label: "Karibu Builders",
+  sector: "construction",
+  paymentBasis: "daily",
+  employerOrClient: "Karibu Builders",
+  confirmed: true,
+  createdAt: "2026-09-14T09:00:00.000Z",
+  updatedAt: "2026-09-20T10:00:00.000Z",
+};
+
 export default function HomePage() {
   const [lang, setLang] = useState<"en" | "sw">("en");
   const [active, setActive] = useState("home");
@@ -200,6 +215,8 @@ export default function HomePage() {
   const [shifts, setShifts] = useState<StoredShift[]>([]);
   const [incidents, setIncidents] = useState<StoredIncident[]>([]);
   const [evidenceList, setEvidenceList] = useState<EvidenceAttachment[]>([]);
+  const [workArrangements, setWorkArrangements] = useState<WorkArrangement[]>([]);
+  const [activeArrangementId, setActiveArrangementId] = useState<string | null>(null);
 
   // Shift Form State - Starts clean without prefilled mock numbers
   const [form, setForm] = useState({
@@ -239,6 +256,8 @@ export default function HomePage() {
 
   const t = copy[lang];
 
+  const activeArrangement = workArrangements.find((arrangement) => arrangement.id === activeArrangementId) || workArrangements[0] || null;
+
   // Live Statutory Audit using Sector Rules Engine
   const auditResult: ShiftAuditResult = useMemo(
     () =>
@@ -274,9 +293,11 @@ export default function HomePage() {
 
         if (isDemo) {
           if (isMounted) {
+            setWorkArrangements([DEMO_ARRANGEMENT]);
+            setActiveArrangementId(DEMO_ARRANGEMENT.id);
             setWorkerProfile(DEMO_PROFILE);
-            setShifts(DEMO_SHIFTS);
-            setIncidents(DEMO_INCIDENTS);
+            setShifts(DEMO_SHIFTS.map((shift) => ({ ...shift, arrangementId: DEMO_ARRANGEMENT.id })));
+            setIncidents(DEMO_INCIDENTS.map((incident) => ({ ...incident, arrangementId: DEMO_ARRANGEMENT.id })));
             setForm((prev) => ({
               ...prev,
               employer: "Karibu Builders",
@@ -287,6 +308,12 @@ export default function HomePage() {
             }));
           }
         } else {
+          const arrangements = await getAllWorkArrangements();
+          if (isMounted) {
+            setWorkArrangements(arrangements);
+            setActiveArrangementId((current) => current || arrangements[0]?.id || null);
+          }
+
           // 1. Worker Profile
           const profile = await getWorkerProfile();
           if (isMounted) {
@@ -304,9 +331,18 @@ export default function HomePage() {
 
           // 2. Shifts from IndexedDB - Starts Clean
           const dbShifts = await getAllShifts();
+          const legacyArrangementId = arrangements.find((arrangement) => arrangement.id === "legacy-existing-work")?.id;
+          const migratedShifts = dbShifts.map((shift) =>
+            shift.arrangementId || !legacyArrangementId ? shift : { ...shift, arrangementId: legacyArrangementId }
+          );
+          if (legacyArrangementId) {
+            await Promise.all(
+              migratedShifts.filter((shift, index) => !dbShifts[index].arrangementId).map((shift) => saveShift(shift))
+            );
+          }
           if (isMounted) {
-            if (dbShifts && dbShifts.length > 0) {
-              setShifts(dbShifts);
+            if (migratedShifts && migratedShifts.length > 0) {
+              setShifts(migratedShifts);
             } else {
               setShifts([]);
             }
@@ -314,8 +350,16 @@ export default function HomePage() {
 
           // 3. Incidents
           const dbIncidents = await getAllIncidents();
+          const migratedIncidents = dbIncidents.map((incident) =>
+            incident.arrangementId || !legacyArrangementId ? incident : { ...incident, arrangementId: legacyArrangementId }
+          );
+          if (legacyArrangementId) {
+            await Promise.all(
+              migratedIncidents.filter((incident, index) => !dbIncidents[index].arrangementId).map((incident) => saveIncident(incident))
+            );
+          }
           if (isMounted && dbIncidents) {
-            setIncidents(dbIncidents);
+            setIncidents(migratedIncidents);
           }
         }
 
@@ -371,6 +415,9 @@ export default function HomePage() {
 
       const dbIncidents = await getAllIncidents();
       setIncidents(dbIncidents && dbIncidents.length > 0 ? dbIncidents : []);
+      const arrangements = await getAllWorkArrangements();
+      setWorkArrangements(arrangements);
+      setActiveArrangementId(arrangements[0]?.id || null);
 
       setForm({
         employer: "",
@@ -390,8 +437,10 @@ export default function HomePage() {
       setIsDemoMode(true);
       window.localStorage.setItem("fairwork-profile-mode", "demo");
       setWorkerProfile(DEMO_PROFILE);
-      setShifts(DEMO_SHIFTS);
-      setIncidents(DEMO_INCIDENTS);
+      setWorkArrangements([DEMO_ARRANGEMENT]);
+      setActiveArrangementId(DEMO_ARRANGEMENT.id);
+      setShifts(DEMO_SHIFTS.map((shift) => ({ ...shift, arrangementId: DEMO_ARRANGEMENT.id })));
+      setIncidents(DEMO_INCIDENTS.map((incident) => ({ ...incident, arrangementId: DEMO_ARRANGEMENT.id })));
       setForm({
         employer: "Karibu Builders",
         location: "Kilimani",
@@ -431,6 +480,25 @@ export default function HomePage() {
     setToastMessage(message);
     setSavedPulse(true);
     setTimeout(() => setSavedPulse(false), 2400);
+  }
+
+  async function handleArrangementSaved(arrangement: WorkArrangement) {
+    if (isDemoMode) {
+      showToast("Demo work arrangements stay separate from your records");
+      return;
+    }
+    await saveWorkArrangement(arrangement);
+    setWorkArrangements((current) => {
+      const withoutCurrent = current.filter((item) => item.id !== arrangement.id);
+      return [arrangement, ...withoutCurrent];
+    });
+    setActiveArrangementId(arrangement.id);
+    setForm((previous) => ({
+      ...previous,
+      sector: arrangement.sector,
+      employer: arrangement.employerOrClient || previous.employer,
+    }));
+    showToast(`${arrangement.label} is ready for new records`);
   }
 
   // Vault Security Handlers
@@ -692,6 +760,7 @@ export default function HomePage() {
       paid: Number(form.paid),
       sunday: form.sunday,
       sector: form.sector,
+      arrangementId: activeArrangement?.id,
       evidenceIds,
       ciphertextPayload,
       isEncrypted,
@@ -755,6 +824,7 @@ export default function HomePage() {
       date: incidentDate,
       category: incidentType,
       description: incidentDescription,
+      arrangementId: activeArrangement?.id,
       evidenceIds,
       ciphertextPayload,
       isEncrypted,
@@ -1553,6 +1623,25 @@ export default function HomePage() {
             </div>
           </section>
 
+          <WorkArrangementPanel
+            arrangements={workArrangements}
+            activeArrangementId={activeArrangementId}
+            onSelect={(id) => {
+              setActiveArrangementId(id);
+              const selected = workArrangements.find((arrangement) => arrangement.id === id);
+              if (selected) {
+                setForm((previous) => ({
+                  ...previous,
+                  sector: selected.sector,
+                  employer: selected.employerOrClient || previous.employer,
+                }));
+              }
+            }}
+            onSave={handleArrangementSaved}
+            disabled={isDemoMode}
+            lang={lang}
+          />
+
           {/* Quick Actions Row */}
           <div className="quick-actions" aria-label="Quick actions">
             <Button type="button" variant="iosPlain" onClick={() => navigate("incidents")}>
@@ -1980,6 +2069,7 @@ export default function HomePage() {
         parentType={evidenceTarget}
         initialTypeHint="payment"
         vaultKey={vaultKey}
+        arrangementId={activeArrangement?.id}
         onAttachmentSaved={(saved) => {
           if (evidenceTarget === "shift") {
             setShiftAttachedEvidence((prev) => [...prev, saved]);
@@ -2025,6 +2115,7 @@ export default function HomePage() {
             paid: ussdShift.paid,
             sunday: false,
             sector: "construction",
+            arrangementId: activeArrangement?.id,
           };
           setShifts((prev) => [newShift, ...prev]);
           saveShift(newShift);

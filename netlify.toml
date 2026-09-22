@@ -9,7 +9,7 @@
   NODE_VERSION = "22"
   NPM_FLAGS = "--legacy-peer-deps"
   # These values are intentionally public and must be embedded in the browser bundle.
-  # Keep secret scanning enabled for server-only credentials such as GEMINI_API_KEY.
+  # Keep secret scanning enabled for server-only credentials such as DEEPSEEK_API_KEY.
   SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
   # Turbopack caches server environment values during compilation. This cache is not
   # published, so omit it while continuing to scan source and deployable output.

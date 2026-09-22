@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL%20%26%20Storage-3ECF8E?logo=supabase)](https://supabase.com/)
 [![Web Crypto](https://img.shields.io/badge/Web%20Crypto-AES--GCM--256-orange)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API)
-[![Gemini](https://img.shields.io/badge/Google%20Gemini-AI%20Rights%20Assistant-8E75B2?logo=google)](https://ai.google.dev/)
+[![DeepSeek](https://img.shields.io/badge/DeepSeek-AI%20Rights%20Assistant-1f6feb)](https://api-docs.deepseek.com/)
 [![Netlify Status](https://img.shields.io/badge/Netlify-Ready-00C7B7?logo=netlify)](https://www.netlify.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -41,7 +41,7 @@ Built for the **Strathmore / iLab Africa Hackathon 2026** (Nairobi, Kenya).
              └───────────────┬──────────────┘       └───────┬──────────────────────┘
                              │                              │
              ┌───────────────▼──────────────┐       ┌───────▼──────────────────────┐
-             │   3. GEMINI AI ASSISTANT     │       │   4. ENCRYPTED CLOUD BACKUP  │
+             │   3. DEEPSEEK AI ASSISTANT   │       │   4. ENCRYPTED CLOUD BACKUP  │
              │   - Bilingual (EN & SW)      │       │             SYNC             │
              │   - Employment Act 2007      │       │   - Supabase PostgreSQL      │
              │   - Offline Rules Fallback   │       │   - Strict RLS & Storage     │
@@ -75,13 +75,15 @@ Built for the **Strathmore / iLab Africa Hackathon 2026** (Nairobi, Kenya).
 - **Interactive Lightbox**: Full-resolution image preview, document classification badges, timestamp verification, and SHA-256 inspection.
 - **Evidence Index**: The cryptographic hash is recorded in the **Haki Dossier** so a later copy can be compared with the captured file. The app does not determine legal admissibility.
 
-### 3. Bilingual Gemini AI Legal Rights Assistant
-- **Kenya Labour Law Intelligence**: Powered by Google Gemini (`gemini-2.5-flash`), with a system prompt strictly grounded in the *Employment Act 2007*, *Regulation of Wages (General) Order*, and *Work Injury Benefits Act (WIBA) 2007*.
+### 3. Bilingual DeepSeek AI Legal Rights Assistant
+- **Kenya Labour Law Intelligence**: Powered by a server-only DeepSeek client, with structured responses grounded in curated source IDs. The AI explains worker-entered facts; deterministic code remains responsible for payment arithmetic.
+- **Four config-driven specialists**: Construction/artisans, agriculture/tea, domestic/care, and gig delivery/boda boda share one router and response contract. A worker can keep several confirmed work arrangements without being assigned a social or legal class.
+- **Confirmation-first records**: Setup, concern, and document suggestions show assumptions, missing questions, confidence, and review status before anything is saved.
 - **English & Sheng/Kiswahili Support**: Allows casual workers to ask questions in their preferred language (e.g. *"Mwajiri amekataa kunilipa overtime ya Sunday, nifanye nini?"*).
 - **Graceful Offline Fallback**: If network connectivity drops, the assistant switches to an embedded offline statutory knowledge base without failing.
 
 ### 4. Encrypted Supabase Cloud Backup
-- **PostgreSQL Database**: Configured with tables for `profiles`, `shifts`, `incidents`, and `evidence_files`.
+- **PostgreSQL Database**: Configured with tables for `profiles`, `work_arrangements`, `shifts`, `incidents`, and `evidence_files`.
 - **Row Level Security (RLS)**: Enforces tenant isolation on all tables using cached `(select auth.uid()) = user_id` policies.
 - **Private Storage Bucket**: Dedicated `evidence-vault` bucket with path-scoped RLS policies (`${user.id}/${evidence.id}.${ext}`).
 - **Encryption boundary**: With a PIN active, wage values, employer details, incident narratives, and evidence content upload as AES-GCM ciphertext. Profile fields, record dates, categories, and operational metadata remain readable to the service.
@@ -118,7 +120,7 @@ Built for the **Strathmore / iLab Africa Hackathon 2026** (Nairobi, Kenya).
 | **Cryptography** | Native [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API) (PBKDF2, AES-GCM-256, SHA-256) |
 | **Cloud Database** | [Supabase PostgreSQL](https://supabase.com/) with Row Level Security (RLS) |
 | **Cloud Storage** | [Supabase Storage](https://supabase.com/storage) (`evidence-vault` bucket) |
-| **AI Rights Bot** | [Google Gemini API](https://ai.google.dev/) (`gemini-2.5-flash`) |
+| **AI Rights Bot** | [DeepSeek API](https://api-docs.deepseek.com/api/create-chat-completion/) (`deepseek-chat`) |
 | **Hosting Targets** | [Netlify](https://www.netlify.com/), [Cloudflare Workers](https://workers.cloudflare.com/), [OpenAI Sites](https://chatgpt.com/) |
 
 ---
@@ -148,8 +150,9 @@ Fill in your credentials in `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
 
-# Google Gemini API Key
-GEMINI_API_KEY=your-gemini-api-key
+# DeepSeek API configuration
+DEEPSEEK_API_KEY=your-deepseek-api-key
+DEEPSEEK_MODEL=deepseek-chat
 ```
 
 ### 4. Run Development Server
@@ -185,7 +188,8 @@ This repository includes a Netlify deployment configuration in [`netlify.toml`](
 6. In **Site Configuration** > **Environment variables**, add:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-   - `GEMINI_API_KEY`
+   - `DEEPSEEK_API_KEY`
+   - `DEEPSEEK_MODEL` (optional; defaults to `deepseek-chat`)
 7. Click **"Deploy site"**!
 
 ### Option B: Netlify CLI

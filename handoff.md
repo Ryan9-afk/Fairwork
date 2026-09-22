@@ -1,12 +1,12 @@
 # Fairwork Pulse — AI Handoff
 
-Last updated: 21 September 2026  
-Current production release: v6  
-Live Site: https://fairwork-pulse-ke.osageder.chatgpt.site/?v=6
+Last updated: 22 September 2026  
+Current source branch: main  
+Deployment: configure the target host from the repository after applying the Supabase migration
 
 ## 1. Mission
 
-Fairwork Pulse is a hackathon MVP for Kenyan casual, gig, and informal workers. It helps a worker create a private, contemporaneous record of shifts, payments, wage shortfalls, overtime, and workplace incidents, then package those records into a Haki Dossier for dispute support.
+Fairwork Pulse is a hackathon MVP for workers across Kenyan sectors, from salaried office staff to casual, gig, and informal workers. It helps a worker create a private, contemporaneous record of work, payments, wage shortfalls, overtime, and workplace incidents, then package those records into a Haki Dossier for dispute support.
 
 Core promise: **Proof of Work. Power to Remedy.**
 
@@ -28,6 +28,11 @@ Read [PRODUCT.md](PRODUCT.md) before changing scope or product claims.
 - Incident form with date, description, and a demo attachment action.
 - Haki Dossier preview with record totals, evidence count, legal references, and browser print/PDF action.
 - English/Kiswahili language toggle for core product copy.
+- Multiple confirmed work arrangements per worker (job/client, sector, payment basis, and employer/platform context).
+- Four config-driven sector specialists behind one server-only DeepSeek router: construction/artisans, agriculture/tea, domestic/care, and gig delivery/boda boda.
+- Confirmation-first AI setup suggestions with assumptions, missing questions, confidence, review status, and source IDs. Suggestions are never saved automatically.
+- `/api/ai/chat`, `/api/ai/work-setup`, `/api/ai/concern`, and `/api/ai/document` with Zod validation, request limits, rate limiting, timeout, source allowlisting, and deterministic fallback.
+- Existing IndexedDB records migrate to a stable `legacy-existing-work` arrangement without changing IDs or contents.
 - Query-backed navigation:
   - `?screen=records`
   - `?screen=incidents`
@@ -36,10 +41,10 @@ Read [PRODUCT.md](PRODUCT.md) before changing scope or product claims.
 
 ### Demonstration-only behavior
 
-- Incident attachments are not uploaded or persisted yet.
-- Incident records currently show a confirmation but are not stored.
-- Dossier evidence count is illustrative.
-- Names, employers, locations, amounts, and existing records are fictional demo data.
+- DeepSeek is optional; without `DEEPSEEK_API_KEY`, the app uses a local fallback and manual setup remains available.
+- Demo mode uses in-memory synthetic records and disables cloud upload; it must never be used as a worker's real ledger.
+- Digital document analysis currently accepts worker-previewed text through the document API; image-only scans remain evidence attachments for manual review.
+- Names, employers, locations, amounts, and existing records in the sample journey are fictional demo data.
 - Legal calculations are indicative, not legal advice.
 
 ## 3. Visual system
@@ -82,13 +87,13 @@ Stack:
 - Tailwind/shadcn-compatible component foundation
 - Lucide React icons
 - OpenAI Sites hosting
-- Supabase client/SSR packages installed but not yet used for product data
+- Supabase client/SSR packages and encrypted sync are used for optional backup; local IndexedDB remains the source of truth.
 
 The app is currently intentionally concentrated in `app/page.tsx`. Refactor only when it directly supports the next feature; do not pause feature work for speculative architecture cleanup.
 
 ## 5. Supabase status
 
-Supabase project URL and publishable key are configured locally and in the Sites production environment.
+Supabase project URL and publishable key are configured locally and should be configured in the selected deployment environment.
 
 Files:
 
@@ -106,7 +111,9 @@ Installed pinned packages:
 
 The Supabase Auth settings endpoint returned HTTP 200 with the configured publishable key. The production Sites environment is at revision 1.
 
-Important: no Fairwork Pulse tables, RLS policies, authentication UI, or sync logic have been implemented yet. The existing localStorage workflow remains the product data source.
+The additive migration `supabase/migrations/20260922000000_work_arrangements.sql` adds `work_arrangements` plus nullable `arrangement_id` fields on shifts, incidents, and evidence. Apply it before testing cloud backup. Existing rows remain valid and are associated locally with `legacy-existing-work`.
+
+Cloud backup is still explicitly user-triggered. Anonymous auth does not promise device-loss recovery; describe it as backup unless a tested recovery path is added.
 
 The next AI must use the installed project skills before Supabase work:
 
@@ -117,18 +124,14 @@ Supabase changes frequently. Check the current changelog and official documentat
 
 ## 6. Recommended next product slice
 
-Implement Supabase persistence without breaking offline-first behavior:
+Complete the validation and submission slice without breaking offline-first behavior:
 
-1. Define `profiles`, `shifts`, `incidents`, and `evidence_files` tables.
-2. Add `user_id` ownership columns and timestamps.
-3. Enable RLS on every exposed table.
-4. Add explicit owner-only SELECT/INSERT/UPDATE/DELETE policies using `(select auth.uid()) = user_id`.
-5. Add anonymous or passwordless worker authentication with a clear upgrade/recovery path.
-6. Keep writes local first, then sync when authenticated and online.
-7. Show pending/synced/failed state without blocking shift logging.
-8. Persist incidents before implementing real Storage uploads.
-9. Add Storage policies before accepting evidence files.
-10. Update the dossier to read actual persisted incident and evidence counts.
+1. Apply and verify the work-arrangements Supabase migration and RLS in the deployed project.
+2. Add a reviewed PDF text extractor (10 MB / 20 pages / 30,000 characters) before enabling digital-PDF submission in the UI.
+3. Add dossier export selection for records, attachments, and personal-detail visibility.
+4. Run three user rehearsals and record confusion/errors without collecting unnecessary personal data.
+5. Ask a labour-law mentor to review one scenario, its sources, and assistance wording.
+6. Rehearse the worker journey on mobile and desktop with DeepSeek unavailable and available.
 
 Do not move identifiable records to Supabase until authentication and RLS are verified together.
 
@@ -238,6 +241,7 @@ These are build/review artifacts, not product source. Do not accidentally stage 
 - New Supabase tables may not be exposed to the Data API automatically. Explicit grants and RLS are separate requirements.
 - Do not add authentication redirects until a working login/onboarding screen exists; the current proxy refreshes sessions without blocking anonymous visitors.
 - Records and incidents must remain usable offline even after synchronization is added.
+- Configure only a rotated replacement DeepSeek key as `DEEPSEEK_API_KEY` in local ignored env files and the deployment provider. Never commit a key or place it in `NEXT_PUBLIC_*` variables.
 - Preserve user changes and inspect `git status` before editing.
 
 ## 12. Demo flow

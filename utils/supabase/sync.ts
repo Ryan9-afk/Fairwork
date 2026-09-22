@@ -6,7 +6,13 @@
  */
 
 import { createClient } from "./client";
-import { getAllShifts, getAllIncidents, getAllEvidence, getWorkerProfile } from "@/lib/vault-db";
+import {
+  getAllShifts,
+  getAllIncidents,
+  getAllEvidence,
+  getAllWorkArrangements,
+  getWorkerProfile,
+} from "@/lib/vault-db";
 import { encryptString } from "@/lib/crypto";
 
 export interface SyncStatus {
@@ -21,6 +27,7 @@ export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<
   uploadedShifts: number;
   uploadedIncidents: number;
   uploadedEvidence: number;
+  uploadedArrangements: number;
   userId?: string;
   error?: string;
   errors?: string[];
@@ -29,6 +36,7 @@ export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<
   let uploadedShifts = 0;
   let uploadedIncidents = 0;
   let uploadedEvidence = 0;
+  let uploadedArrangements = 0;
 
   try {
     const supabase = createClient();
@@ -49,6 +57,7 @@ export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<
         uploadedShifts: 0,
         uploadedIncidents: 0,
         uploadedEvidence: 0,
+        uploadedArrangements: 0,
         error: "Supabase authentication required. Please sign in or enable anonymous sign-in in Supabase Auth settings.",
         errors: ["Authentication failed: No user session found."],
       };
@@ -73,13 +82,39 @@ export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<
       console.warn("Failed to sync profile:", profileErr);
     }
 
-    // 1. Fetch local shifts from IndexedDB
+    // 1. Sync work arrangements first. This also lazily migrates legacy local
+    // records by assigning them the stable "Existing work" arrangement ID.
+    const localArrangements = await getAllWorkArrangements();
+    for (const arrangement of localArrangements) {
+      const payload = {
+        user_id: user.id,
+        id: arrangement.id,
+        label: arrangement.label,
+        sector: arrangement.sector,
+        payment_basis: arrangement.paymentBasis,
+        employer_or_client: arrangement.employerOrClient || null,
+        confirmed: arrangement.confirmed,
+        created_at: arrangement.createdAt,
+        updated_at: arrangement.updatedAt,
+      };
+      const { error } = await supabase
+        .from("work_arrangements")
+        .upsert(payload, { onConflict: "user_id,id" });
+      if (error) {
+        syncErrors.push(`Work arrangement (${arrangement.label}): ${error.message}`);
+      } else {
+        uploadedArrangements++;
+      }
+    }
+
+    // 2. Fetch local shifts from IndexedDB
     const localShifts = await getAllShifts();
 
     for (const shift of localShifts) {
       const payload = {
         user_id: user.id,
         client_id: String(shift.id),
+        arrangement_id: shift.arrangementId || "legacy-existing-work",
         shift_date: shift.date,
         sector: shift.sector || "construction",
         employer: shift.isEncrypted ? "[ENCRYPTED]" : shift.employer,
@@ -105,13 +140,14 @@ export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<
       }
     }
 
-    // 2. Fetch local incidents from IndexedDB
+    // 3. Fetch local incidents from IndexedDB
     const localIncidents = await getAllIncidents();
 
     for (const inc of localIncidents) {
       const payload = {
         user_id: user.id,
         client_id: String(inc.id),
+        arrangement_id: inc.arrangementId || "legacy-existing-work",
         category: inc.category,
         incident_date: inc.date,
         description: inc.isEncrypted ? "[ENCRYPTED IN VAULT]" : inc.description,
@@ -133,8 +169,15 @@ export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<
       }
     }
 
-    // 3. Fetch local evidence attachments from IndexedDB
+    // 4. Fetch local evidence attachments from IndexedDB
     const localEvidence = await getAllEvidence();
+    const arrangementByParent = new Map<string, string>();
+    for (const shift of localShifts) {
+      arrangementByParent.set(`shift:${shift.id}`, shift.arrangementId || "legacy-existing-work");
+    }
+    for (const incident of localIncidents) {
+      arrangementByParent.set(`incident:${incident.id}`, incident.arrangementId || "legacy-existing-work");
+    }
 
     for (const ev of localEvidence) {
       let storagePath: string | null = null;
@@ -191,6 +234,10 @@ export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<
       const payload = {
         id: ev.id,
         user_id: user.id,
+        arrangement_id:
+          ev.arrangementId ||
+          arrangementByParent.get(`${ev.parentType}:${ev.parentId}`) ||
+          "legacy-existing-work",
         parent_type: ev.parentType,
         parent_id: ev.parentId ? String(ev.parentId) : null,
         file_name: ev.fileName,
@@ -222,6 +269,7 @@ export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<
       uploadedShifts,
       uploadedIncidents,
       uploadedEvidence,
+      uploadedArrangements,
       userId: user.id,
       error: syncErrors.length > 0 ? syncErrors.join("; ") : undefined,
       errors: syncErrors,
@@ -232,6 +280,7 @@ export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<
       uploadedShifts,
       uploadedIncidents,
       uploadedEvidence,
+      uploadedArrangements,
       error: String(err),
       errors: [...syncErrors, String(err)],
     };

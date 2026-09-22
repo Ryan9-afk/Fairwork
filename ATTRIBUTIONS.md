@@ -6,6 +6,6 @@ The interface uses the self-hosted Geist font as a fallback on devices without A
 
 Legal references include the Kenya Law publication of the Employment Act, 2007 and named wage and work-injury instruments. Statutory calculations are informational estimates and require review against the current applicable order, occupation, location, and facts.
 
-AI assistance was used during software development, documentation, and presentation preparation. The optional in-product rights-information assistant uses Google Gemini when configured and otherwise uses an offline rules fallback. AI does not calculate payment figures. The student team remains responsible for research, design decisions, code review, testing, presentation, and all submitted claims.
+AI assistance was used during software development, documentation, and presentation preparation. The optional in-product rights-information assistant uses DeepSeek when configured and otherwise uses an offline rules fallback. AI does not calculate payment figures or make legal classifications. The student team remains responsible for research, design decisions, code review, testing, presentation, and all submitted claims.
 
 Demo names, phone numbers, employers, incidents, payments, evidence, dashboard values, and testimonials are synthetic unless expressly identified otherwise.
