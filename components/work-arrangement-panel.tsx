@@ -108,6 +108,14 @@ function readSuggestedValue(input: unknown): string {
   return "";
 }
 
+function followUpFields(answers: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(answers)
+      .map(([question, answer]) => [`Answer: ${question}`, answer.trim()] as const)
+      .filter(([, answer]) => answer)
+  );
+}
+
 function suggestedDraft(result: SectorAgentResult, fallback: Draft): Draft {
   const fields = result.suggestedFields || {};
   const value = (key: string) => readSuggestedValue(fields[key]);
@@ -177,7 +185,7 @@ export function WorkArrangementPanel({
     setIsOpen(true);
   }
 
-  async function askAssistant() {
+  async function askAssistant(includeAnswers = false) {
     if (description.trim().length < 8) {
       setSuggestionError(lang === "sw" ? "Eleza kazi yako kwa sentensi fupi." : "Tell us a little more about your work first.");
       return;
@@ -185,12 +193,20 @@ export function WorkArrangementPanel({
     setSuggestionState("loading");
     setSuggestionError("");
     try {
+      const answerFields = includeAnswers ? followUpFields(followUpAnswers) : {};
+      const additionalAnswers = Object.entries(answerFields)
+        .map(([key, value]) => `${key.replace(/^Answer:\s*/, "")}: ${value}`)
+        .join("\n");
+      const message = [
+        description.trim(),
+        additionalAnswers ? `Additional answers from the worker:\n${additionalAnswers}` : "",
+      ].filter(Boolean).join("\n\n");
       const response = await fetch("/api/ai/work-setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // A new setup has no confirmed sector yet. Let the router use the
         // worker's description, then show the result for confirmation.
-        body: JSON.stringify({ message: description.trim(), lang, intent: "setup" }),
+        body: JSON.stringify({ message, lang, intent: "setup" }),
       });
       const json = (await response.json()) as { agent?: unknown; result?: unknown; fallback?: boolean } & Record<string, unknown>;
       if (json.fallback) {
@@ -206,7 +222,10 @@ export function WorkArrangementPanel({
       const parsed = SectorAgentResultSchema.safeParse(json.agent ?? json.result ?? json);
       if (!response.ok || !parsed.success) throw new Error("The assistant could not return a safe suggestion.");
       setSuggestion(parsed.data);
-      setDraft(suggestedDraft(parsed.data, draft));
+      setDraft(suggestedDraft(parsed.data, {
+        ...draft,
+        customFields: { ...draft.customFields, ...answerFields },
+      }));
       setFollowUpAnswers({});
       setSuggestionState("idle");
     } catch {
@@ -254,11 +273,7 @@ export function WorkArrangementPanel({
     setSaving(true);
     try {
       const existing = editingId ? arrangements.find((arrangement) => arrangement.id === editingId) : undefined;
-      const answeredFollowUps = Object.fromEntries(
-        Object.entries(followUpAnswers)
-          .map(([question, answer]) => [`Answer: ${question}`, answer.trim()] as const)
-          .filter(([, answer]) => answer)
-      );
+      const answeredFollowUps = followUpFields(followUpAnswers);
       const arrangement = createWorkArrangement({
         ...existing,
         id: existing?.id,
@@ -284,6 +299,7 @@ export function WorkArrangementPanel({
 
   const visibleQuestions = suggestion?.missingQuestions.slice(0, 3) || [];
   const extraQuestionCount = Math.max(0, (suggestion?.missingQuestions.length || 0) - visibleQuestions.length);
+  const hasFollowUpAnswers = Object.values(followUpAnswers).some((answer) => answer.trim());
 
   return (
     <section className="arrangement-panel" aria-labelledby="work-arrangements-title">
@@ -343,7 +359,7 @@ export function WorkArrangementPanel({
                   <div className="arrangement-ai-heading"><Sparkles size={16} /><strong>Tell us in your own words</strong><span>Optional</span></div>
                   <p>One or two sentences is enough. Say what you do, who pays you, how you are paid, and what you want to keep a record of. The assistant fills known fields and asks only what is still useful.</p>
                   <textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="For example: I deliver parcels on a motorbike and receive payouts after platform fees…" maxLength={3000} />
-                  <div className="arrangement-ai-footer"><small>{description.length}/3,000</small><Button type="button" variant="iosTinted" onClick={askAssistant} disabled={suggestionState === "loading"}>{suggestionState === "loading" ? "Thinking…" : "Suggest setup"}</Button></div>
+                  <div className="arrangement-ai-footer"><small>{description.length}/3,000</small><Button type="button" variant="iosTinted" onClick={() => askAssistant()} disabled={suggestionState === "loading"}>{suggestionState === "loading" ? "Thinking…" : "Suggest setup"}</Button></div>
                   {suggestionState === "error" && <p className="arrangement-error" role="alert">{suggestionError}</p>}
                 </div>
               )}
@@ -353,7 +369,7 @@ export function WorkArrangementPanel({
                   <div className="arrangement-suggestion-title"><span><Sparkles size={15} /> Suggested context</span><b>{suggestion.confidence} confidence</b></div>
                   <p>{suggestion.explanation || "Review the fields below and add only the details that matter."}</p>
                   {suggestion.assumptions.length > 0 && <div className="arrangement-assumptions"><TriangleAlert size={14} /><span>{suggestion.assumptions.join(" ")}</span></div>}
-                  {visibleQuestions.length > 0 && <div className="arrangement-questions"><div className="arrangement-questions-heading"><strong>Only if you know</strong><span>Answer below or leave blank. You can add it later.</span></div>{visibleQuestions.map((question) => <label key={question}><span>{question}<i>Optional</i></span><input value={followUpAnswers[question] || ""} onChange={(event) => setFollowUpAnswers((current) => ({ ...current, [question]: event.target.value }))} placeholder="Add what you know" /></label>)}{extraQuestionCount > 0 && <small>{extraQuestionCount} more detail{extraQuestionCount === 1 ? "" : "s"} can be added later.</small>}</div>}
+                  {visibleQuestions.length > 0 && <div className="arrangement-questions"><div className="arrangement-questions-heading"><strong>Only if you know</strong><span>Answer below or leave blank. You can add it later.</span></div>{visibleQuestions.map((question) => <label key={question}><span>{question}<i>Optional</i></span><input value={followUpAnswers[question] || ""} onChange={(event) => setFollowUpAnswers((current) => ({ ...current, [question]: event.target.value }))} placeholder="Add what you know" /></label>)}{extraQuestionCount > 0 && <small>{extraQuestionCount} more detail{extraQuestionCount === 1 ? "" : "s"} can be added later.</small>}<Button type="button" variant="iosTinted" onClick={() => askAssistant(true)} disabled={!hasFollowUpAnswers || suggestionState === "loading"}>{suggestionState === "loading" ? "Updating suggestion…" : "Update suggestion with answers"}</Button></div>}
                   <div className="arrangement-review-actions"><Button type="button" variant="iosPrimary" onClick={() => setSuggestion(null)}><Check size={15} /> Review filled fields</Button><Button type="button" variant="iosPlain" onClick={() => setSuggestion(null)}><Edit3 size={15} /> Edit fields</Button><button type="button" onClick={markUnsure}>I’m unsure</button></div>
                 </div>
               )}
