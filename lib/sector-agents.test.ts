@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SECTOR_AGENT_CONFIGS, buildSectorSystemPrompt, getSectorAgentConfig } from "./sector-agents";
-import type { KenyanSector } from "./legal-engine";
+import { SECTOR_IDS } from "./legal-engine";
 
 describe("buildSectorSystemPrompt", () => {
   it("joins each instruction with a real newline", () => {
@@ -30,7 +30,7 @@ describe("buildSectorSystemPrompt", () => {
 
 describe("getSectorAgentConfig", () => {
   it("returns the matching config for every sector", () => {
-    for (const sector of Object.keys(SECTOR_AGENT_CONFIGS) as KenyanSector[]) {
+    for (const sector of SECTOR_IDS) {
       expect(getSectorAgentConfig(sector).sector).toBe(sector);
     }
   });

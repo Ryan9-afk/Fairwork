@@ -13,7 +13,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { KenyanSector, SECTOR_CONFIGS } from "@/lib/legal-engine";
+import { KenyanSector, SECTOR_CONFIGS, SECTOR_IDS, isKenyanSector } from "@/lib/legal-engine";
 import {
   createWorkArrangement,
   PAYMENT_BASES,
@@ -33,12 +33,9 @@ interface WorkArrangementPanelProps {
   lang?: "en" | "sw";
 }
 
-const SECTOR_LABELS: Record<KenyanSector, string> = {
-  construction: "Construction & artisans",
-  agriculture: "Agriculture & tea",
-  domestic: "Domestic & care work",
-  gig_delivery: "Gig delivery & boda boda",
-};
+function sectorLabel(sector: KenyanSector): string {
+  return SECTOR_CONFIGS[sector]?.name || "Other work";
+}
 
 type Draft = {
   label: string;
@@ -128,10 +125,8 @@ function suggestedDraft(result: SectorAgentResult, fallback: Draft): Draft {
   }, { ...fallback.customFields });
   const inferredPaymentBasis = normalizePaymentBasis(paymentBasis);
   return {
-    label: value("label") || value("arrangementLabel") || fallback.label || SECTOR_LABELS[result.sector],
-    sector: (["construction", "agriculture", "domestic", "gig_delivery"] as string[]).includes(sector)
-      ? (sector as KenyanSector)
-      : result.sector,
+    label: value("label") || value("arrangementLabel") || fallback.label || result.sectorLabel || sectorLabel(result.sector),
+    sector: isKenyanSector(sector) ? sector : result.sector,
     paymentBasis: (PAYMENT_BASES as readonly string[]).includes(paymentBasis)
       ? (paymentBasis as PaymentBasis)
       : inferredPaymentBasis || fallback.paymentBasis,
@@ -269,7 +264,7 @@ export function WorkArrangementPanel({
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    const label = draft.label.trim() || SECTOR_LABELS[draft.sector];
+    const label = draft.label.trim() || sectorLabel(draft.sector);
     setSaving(true);
     try {
       const existing = editingId ? arrangements.find((arrangement) => arrangement.id === editingId) : undefined;
@@ -337,7 +332,7 @@ export function WorkArrangementPanel({
 
       {active && (
         <div className="arrangement-meta" aria-live="polite">
-          <span>{SECTOR_LABELS[active.sector]}</span>
+          <span>{active.sector === "other" ? active.label : sectorLabel(active.sector)}</span>
           <span>{PAYMENT_BASIS_LABELS[active.paymentBasis]}</span>
           {active.employerOrClient && <span>{active.employerOrClient}</span>}
           <span className="arrangement-confirmed"><Check size={13} /> Confirmed by you</span>
@@ -376,7 +371,7 @@ export function WorkArrangementPanel({
 
               <form id="arrangement-form" className="arrangement-form" onSubmit={save}>
                 <label><span>Arrangement name</span><input value={draft.label} onChange={(event) => setDraft({ ...draft, label: event.target.value })} placeholder="e.g. Karibu Builders or Office job" /></label>
-                <label><span>Work sector</span><select value={draft.sector} onChange={(event) => setDraft({ ...draft, sector: event.target.value as KenyanSector })}>{Object.keys(SECTOR_CONFIGS).map((sector) => <option key={sector} value={sector}>{SECTOR_LABELS[sector as KenyanSector]}</option>)}</select></label>
+                <label><span>Work sector</span><select value={draft.sector} onChange={(event) => setDraft({ ...draft, sector: event.target.value as KenyanSector })}>{SECTOR_IDS.map((sector) => <option key={sector} value={sector}>{sectorLabel(sector)}</option>)}</select></label>
                 <label><span>How are you paid?</span><select value={draft.paymentBasis} onChange={(event) => setDraft({ ...draft, paymentBasis: event.target.value as PaymentBasis })}>{PAYMENT_BASES.map((basis) => <option key={basis} value={basis}>{PAYMENT_BASIS_LABELS[basis]}</option>)}</select></label>
                 <label><span>Employer, client, or platform <i>Optional</i></span><input value={draft.employerOrClient} onChange={(event) => setDraft({ ...draft, employerOrClient: event.target.value })} placeholder="e.g. Employer name or M-Pesa client" /></label>
                 {Object.entries(draft.customFields).map(([key, value]) => (

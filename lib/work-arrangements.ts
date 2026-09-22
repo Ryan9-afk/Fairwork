@@ -51,7 +51,15 @@ export function routeSectorFromText(text: string): KenyanSector | null {
   const value = text.toLowerCase();
   if (/construction|builder|foreman|mason|fund[io]|mjengo|site/.test(value)) return "construction";
   if (/farm|agri|tea|harvest|crop|field|shamba|pick/.test(value)) return "agriculture";
-  if (/domestic|household|caregiver|nanny|househelp|cleaner|nyumbani/.test(value)) return "domestic";
+  if (/domestic|household|caregiver|nanny|househelp|nyumbani/.test(value)) return "domestic";
   if (/delivery|boda|rider|courier|platform|gig|errand|runner|uber|bolt|glovo|jiji/.test(value)) return "gig_delivery";
+  if (/security|guard|watchman|ulinzi|askari/.test(value)) return "security";
+  if (/matatu|psv|bus|conductor|tuktuk|tuk tuk|taxi/.test(value)) return "transport_psv";
+  if (/warehouse|factory|manufactur|production|assembly|kiwanda|plant/.test(value)) return "manufacturing";
+  if (/clean|janitor|housekeep|facility|usafi|grounds/.test(value)) return "cleaning_facility";
+  if (/hospital|clinic|nurse|health|pharmac|medical|patient|care home/.test(value)) return "healthcare_care";
+  if (/retail|shop|supermarket|hotel|restaurant|waiter|waitress|catering|\bbar\b|cafe|duka|hospitality|mall|vendor/.test(value)) return "retail_hospitality";
+  if (/office|corporate|salaried|salary|professional|manager|accountant|engineer|bank|administrat|consultant|lawyer|developer|intern/.test(value)) return "office_professional";
+  if (/labour|labor|casual|odd job|handyman|loader|general worker/.test(value)) return "general_labour";
   return null;
 }

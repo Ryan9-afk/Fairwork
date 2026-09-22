@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   SECTOR_CONFIGS,
+  SECTOR_IDS,
   calculateSectorAudit,
+  getSectorConfig,
+  isKenyanSector,
   parseHoursBetween,
   type KenyanSector,
 } from "./legal-engine";
@@ -30,20 +33,37 @@ describe("parseHoursBetween", () => {
   });
 });
 
-describe("SECTOR_CONFIGS", () => {
-  it("defines every supported sector with a positive baseline", () => {
-    const sectors: KenyanSector[] = ["construction", "agriculture", "domestic", "gig_delivery"];
-    for (const sector of sectors) {
-      expect(SECTOR_CONFIGS[sector].dailyMinimumBaseline).toBeGreaterThan(0);
-      expect(SECTOR_CONFIGS[sector].statutoryCitations.length).toBeGreaterThan(0);
-    }
+describe("SECTOR_IDS", () => {
+  it("covers corporate and low-wage categories plus a freeform bucket", () => {
+    expect(SECTOR_IDS).toContain("office_professional");
+    expect(SECTOR_IDS).toContain("retail_hospitality");
+    expect(SECTOR_IDS).toContain("security");
+    expect(SECTOR_IDS).toContain("healthcare_care");
+    expect(SECTOR_IDS).toContain("other");
   });
 
-  it("uses statutory overtime multipliers", () => {
-    for (const config of Object.values(SECTOR_CONFIGS)) {
-      expect(config.normalOvertimeMultiplier).toBe(1.5);
-      expect(config.restDayOvertimeMultiplier).toBe(2.0);
+  it("has a matching config for every id", () => {
+    for (const id of SECTOR_IDS) {
+      const config = SECTOR_CONFIGS[id];
+      expect(config.id).toBe(id);
+      expect(config.name.length).toBeGreaterThan(0);
+      expect(config.statutoryCitations.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("isKenyanSector", () => {
+  it("accepts known ids and rejects anything else", () => {
+    expect(isKenyanSector("office_professional")).toBe(true);
+    expect(isKenyanSector("other")).toBe(true);
+    expect(isKenyanSector("wizardry")).toBe(false);
+    expect(isKenyanSector(42)).toBe(false);
+  });
+});
+
+describe("getSectorConfig", () => {
+  it("falls back to the freeform config for an unknown value", () => {
+    expect(getSectorConfig("unknown" as KenyanSector).id).toBe("other");
   });
 });
 
@@ -55,7 +75,6 @@ describe("calculateSectorAudit", () => {
     expect(result.wageDeficit).toBe(0);
     expect(result.overtimePayDue).toBe(0);
     expect(result.totalClaim).toBe(0);
-    expect(result.isMinimumWageShortfall).toBe(false);
     expect(result.reviewStatus).toBe("recorded");
   });
 
@@ -81,25 +100,36 @@ describe("calculateSectorAudit", () => {
     expect(result.overtimePayDue).toBe(600);
   });
 
-  it("derives the hourly rate from the entered pay, not the baseline", () => {
+  it("derives the hourly rate from the entered pay, not a statutory figure", () => {
     const result = calculateSectorAudit("construction", 1600, 1600, "08:00", "16:00", false);
     expect(result.hourlyRate).toBe(200);
   });
 
-  it("falls back to the sector baseline when agreed pay is zero", () => {
-    const result = calculateSectorAudit("domestic", 0, 0, "08:00", "16:00", false);
-    expect(result.hourlyRate).toBe(SECTOR_CONFIGS.domestic.dailyMinimumBaseline / 8);
+  it("returns zero overtime when no agreed pay is entered", () => {
+    const result = calculateSectorAudit("domestic", 0, 0, "08:00", "18:00", false);
+    expect(result.hourlyRate).toBe(0);
+    expect(result.overtimePayDue).toBe(0);
   });
 
-  it("flags agreed pay below the statutory baseline", () => {
-    const result = calculateSectorAudit("construction", 1000, 1000, "08:00", "16:00", false);
-    expect(result.isMinimumWageShortfall).toBe(true);
-    expect(result.reviewStatus).toBe("needs-review");
+  it("does not apply a minimum-wage comparison for a low agreed price", () => {
+    const result = calculateSectorAudit("construction", 300, 300, "08:00", "16:00", false);
+    expect(result.wageDeficit).toBe(0);
+    expect(result.totalClaim).toBe(0);
+    expect(result.reviewStatus).toBe("recorded");
   });
 
-  it("falls back to construction for an unknown sector", () => {
-    const result = calculateSectorAudit("unknown" as KenyanSector, 1200, 1200, "08:00", "16:00", false);
-    expect(result.sectorName).toBe(SECTOR_CONFIGS.construction.name);
+  it("works for the new corporate and low-wage categories", () => {
+    const office = calculateSectorAudit("office_professional", 800, 800, "09:00", "19:00", false);
+    expect(office.sectorName).toBe(SECTOR_CONFIGS.office_professional.name);
+    expect(office.overtimeHours).toBe(2);
+    const security = calculateSectorAudit("security", 600, 500, "18:00", "02:00", false);
+    expect(security.totalHours).toBe(8);
+    expect(security.wageDeficit).toBe(100);
+  });
+
+  it("falls back to the freeform config for an unknown sector", () => {
+    const result = calculateSectorAudit("unknown" as KenyanSector, 1000, 1000, "08:00", "16:00", false);
+    expect(result.sectorName).toBe(SECTOR_CONFIGS.other.name);
   });
 
   it("always returns four auditable line items", () => {

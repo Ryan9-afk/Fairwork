@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { User, Phone, MapPin, Briefcase, Check, X, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WorkerProfile, saveWorkerProfile } from "@/lib/vault-db";
-import { KenyanSector } from "@/lib/legal-engine";
+import { KenyanSector, SECTOR_CONFIGS, SECTOR_IDS } from "@/lib/legal-engine";
 
 interface WorkerProfileModalProps {
   isOpen: boolean;
@@ -141,10 +141,9 @@ export function WorkerProfileModal({
               value={sector}
               onChange={(e) => setSector(e.target.value as KenyanSector)}
             >
-              <option value="construction">Construction & Artisans (Ujenzi)</option>
-              <option value="agriculture">Agriculture & Tea Picking (Kilimo)</option>
-              <option value="domestic">Domestic Workers (Wafanyakazi wa Nyumbani)</option>
-              <option value="gig_delivery">Gig Delivery & Boda Boda</option>
+              {SECTOR_IDS.map((value) => (
+                <option key={value} value={value}>{SECTOR_CONFIGS[value].name} ({SECTOR_CONFIGS[value].nameSwahili})</option>
+              ))}
             </select>
             </label>
 

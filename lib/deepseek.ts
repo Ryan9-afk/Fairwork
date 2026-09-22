@@ -118,7 +118,7 @@ export async function runDeepSeekAgent(request: DeepSeekRequest): Promise<{ resu
     request.sector
       ? "The worker's confirmed work arrangement selected this sector. Do not change it."
       : "No work arrangement is confirmed. Ask a short clarification question before treating the inferred sector as final.",
-    "Respond as JSON with exactly these keys: sector, intent, suggestedFields, missingQuestions, explanation, assumptions, sourceIds, reviewStatus, confidence.",
+    "Respond as JSON with exactly these keys: sector, sectorLabel (optional, only for sector \"other\"), intent, suggestedFields, missingQuestions, explanation, assumptions, sourceIds, reviewStatus, confidence.",
     "Use language: " + (request.lang === "sw" ? "Kiswahili" : "English") + ". Suggested fields are drafts only and must be confirmed by the worker.",
   ].join("\n");
   const controller = new AbortController();

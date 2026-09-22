@@ -45,6 +45,7 @@ import {
   calculateSectorAudit,
   KenyanSector,
   SECTOR_CONFIGS,
+  SECTOR_IDS,
   ShiftAuditResult,
 } from "@/lib/legal-engine";
 import {
@@ -1762,10 +1763,9 @@ export default function HomePage() {
                   onChange={(e) => setForm({ ...form, sector: e.target.value as KenyanSector })}
                   className="w-full h-11 bg-transparent text-right font-semibold text-gray-900 focus:outline-none"
                 >
-                  <option value="construction">Construction & Artisans (Ujenzi)</option>
-                  <option value="agriculture">Agriculture & Tea Picking (Kilimo)</option>
-                  <option value="domestic">Domestic Workers (Wafanyakazi wa Nyumbani)</option>
-                  <option value="gig_delivery">Gig Delivery & Boda Boda</option>
+                  {SECTOR_IDS.map((value) => (
+                    <option key={value} value={value}>{SECTOR_CONFIGS[value].name}</option>
+                  ))}
                 </select>
               </label>
 

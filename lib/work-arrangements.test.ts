@@ -12,6 +12,14 @@ describe("routeSectorFromText", () => {
     ["I pick tea on a farm each morning", "agriculture"],
     ["I am a househelp for a family in Nairobi", "domestic"],
     ["I ride a boda boda and deliver for Bolt", "gig_delivery"],
+    ["I work in an office as an accountant", "office_professional"],
+    ["I am a waiter in a hotel restaurant", "retail_hospitality"],
+    ["I work as a night security guard", "security"],
+    ["I work in a factory on the production line", "manufacturing"],
+    ["I am a cleaner at a mall", "cleaning_facility"],
+    ["I am a nurse at the hospital", "healthcare_care"],
+    ["I drive a matatu as a conductor", "transport_psv"],
+    ["I do casual labour loading goods", "general_labour"],
   ] as const)("routes %j to %s", (text, sector) => {
     expect(routeSectorFromText(text)).toBe(sector);
   });
