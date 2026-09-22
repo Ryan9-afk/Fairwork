@@ -111,7 +111,7 @@ Installed pinned packages:
 
 The Supabase Auth settings endpoint returned HTTP 200 with the configured publishable key. The production Sites environment is at revision 1.
 
-The additive migrations `supabase/migrations/20260922000000_work_arrangements.sql` and `supabase/migrations/20260922000001_work_arrangement_custom_fields.sql` add `work_arrangements`, flexible confirmed `custom_fields`, and nullable `arrangement_id` fields on shifts, incidents, and evidence. Apply both in order before testing cloud backup. Existing rows remain valid and are associated locally with `legacy-existing-work`.
+The additive migrations `supabase/migrations/20260922000000_work_arrangements.sql`, `supabase/migrations/20260922000001_work_arrangement_custom_fields.sql`, `supabase/migrations/20260922000002_work_arrangements_rls_with_check.sql`, and `supabase/migrations/20260922000003_expand_work_sectors.sql` have been applied to the Supabase database via the Supabase MCP and verified. See [docs/MCP-DATABASE-HANDOFF.md](docs/MCP-DATABASE-HANDOFF.md) for the full migration verification report and schema details.
 
 Cloud backup is still explicitly user-triggered. Anonymous auth does not promise device-loss recovery; describe it as backup unless a tested recovery path is added.
 
@@ -126,7 +126,7 @@ Supabase changes frequently. Check the current changelog and official documentat
 
 Complete the validation and submission slice without breaking offline-first behavior:
 
-1. Apply and verify the work-arrangements Supabase migration and RLS in the deployed project.
+1. [COMPLETED] Applied and verified the work-arrangements Supabase migration and RLS in the deployed project (documented in [docs/MCP-DATABASE-HANDOFF.md](docs/MCP-DATABASE-HANDOFF.md)).
 2. Add a reviewed PDF text extractor (10 MB / 20 pages / 30,000 characters) before enabling digital-PDF submission in the UI.
 3. Add dossier export selection for records, attachments, and personal-detail visibility.
 4. Run three user rehearsals and record confusion/errors without collecting unnecessary personal data.
