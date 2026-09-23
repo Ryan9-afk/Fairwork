@@ -16,6 +16,7 @@ import {
   Check,
   ChevronRight,
   Cloud,
+  CloudDownload,
   Download,
   Eye,
   FileCheck2,
@@ -28,6 +29,7 @@ import {
   Lock,
   MapPin,
   Menu,
+  MessageCircle,
   Plus,
   ReceiptText,
   Scale,
@@ -38,7 +40,7 @@ import {
   User,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 // Modules
@@ -48,6 +50,7 @@ import {
   SECTOR_CONFIGS,
   SECTOR_IDS,
   ShiftAuditResult,
+  ShiftDayType,
 } from "@/lib/legal-engine";
 import {
   getAllShifts,
@@ -65,6 +68,7 @@ import {
   EvidenceAttachment,
   getAllWorkArrangements,
   saveWorkArrangement,
+  clearLocalVault,
 } from "@/lib/vault-db";
 import { WorkArrangement } from "@/lib/work-arrangements";
 import {
@@ -84,6 +88,7 @@ import {
 import { EvidenceModal } from "@/components/evidence-modal";
 import { VaultLockModal } from "@/components/vault-lock-modal";
 import { AIAssistantDrawer } from "@/components/ai-assistant-drawer";
+import { BackupRecoveryModal } from "@/components/backup-recovery-modal";
 import { RegulatorDashboard } from "@/components/regulator-dashboard";
 import { FeaturePhoneModal } from "@/components/feature-phone-modal";
 import { CloudSyncModal } from "@/components/cloud-sync-modal";
@@ -102,12 +107,19 @@ const copy = {
     incidents: "Incidents",
     dossier: "Haki Dossier",
     employer: "Employer or contractor",
-    site: "Work site",
+    site: "Location",
     start: "Start time",
     end: "End time",
     agreed: "Agreed pay",
     paid: "Amount received",
-    rest: "Sunday or public holiday",
+    dayType: "Type of day",
+    normalDay: "Normal working day",
+    restDay: "Weekly rest day",
+    holiday: "Public holiday",
+    normalHelp: "1.5× for hours beyond the standard 8-hour day",
+    doubleHelp: "2.0× for all hours worked",
+    restPay: "Rest-day pay due",
+    holidayPay: "Holiday pay due",
     save: "Save shift record",
     shortfall: "Wage shortfall",
     overtime: "Overtime due",
@@ -117,7 +129,7 @@ const copy = {
     private: "Encrypted device vault",
     privateText: "With a PIN, sensitive pay and incident content is encrypted on this device before optional cloud backup.",
     incidentTitle: "Record what happened",
-    incidentText: "Capture an injury, dismissal, wage withholding, or maternity discrimination while details are fresh.",
+    incidentText: "Capture workplace abuse, an injury, or maternity discrimination while details are fresh.",
     startIncident: "Start incident record",
     dossierText: "Compile your shifts, calculations, and evidence into one indexed dispute package.",
     build: "Build dossier preview",
@@ -132,12 +144,19 @@ const copy = {
     incidents: "Matukio",
     dossier: "Jalada la Haki",
     employer: "Mwajiri au kontrakta",
-    site: "Mahali pa kazi",
+    site: "Mahali",
     start: "Saa ya kuanza",
     end: "Saa ya kumaliza",
     agreed: "Malipo mliyokubaliana",
     paid: "Kiasi ulicholipwa",
-    rest: "Jumapili au sikukuu",
+    dayType: "Aina ya siku",
+    normalDay: "Siku ya kawaida ya kazi",
+    restDay: "Siku ya mapumziko ya wiki",
+    holiday: "Sikukuu ya umma",
+    normalHelp: "Mara 1.5 kwa saa zaidi ya saa 8 za kawaida",
+    doubleHelp: "Mara 2.0 kwa saa zote zilizofanywa",
+    restPay: "Malipo ya siku ya mapumziko",
+    holidayPay: "Malipo ya sikukuu",
     save: "Hifadhi rekodi ya zamu",
     shortfall: "Upungufu wa mshahara",
     overtime: "Malipo ya saa za ziada",
@@ -206,6 +225,7 @@ export default function HomePage() {
   const [toastMessage, setToastMessage] = useState("Shift saved to your device");
   const [isOnline, setIsOnline] = useState(true);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  const [hasHydrated, setHasHydrated] = useState(false);
   const [isSavingShift, setIsSavingShift] = useState(false);
   const [isSavingIncident, setIsSavingIncident] = useState(false);
 
@@ -234,7 +254,7 @@ export default function HomePage() {
     end: "17:00",
     agreed: "",
     paid: "",
-    sunday: false,
+    dayType: "normal" as ShiftDayType,
     sector: "construction" as KenyanSector,
   });
 
@@ -243,7 +263,7 @@ export default function HomePage() {
   const [shiftDraftId, setShiftDraftId] = useState(() => createRecordId());
 
   // Incident Form State
-  const [incidentType, setIncidentType] = useState<"injury" | "wages" | "maternity" | "">("");
+  const [incidentType, setIncidentType] = useState<"injury" | "general" | "maternity" | "">("");
   const [incidentDate, setIncidentDate] = useState(new Date().toISOString().split("T")[0]);
   const [incidentDescription, setIncidentDescription] = useState("");
   const [incidentAttachedEvidence, setIncidentAttachedEvidence] = useState<EvidenceAttachment[]>([]);
@@ -256,6 +276,7 @@ export default function HomePage() {
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isFeaturePhoneOpen, setIsFeaturePhoneOpen] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
   const [selectedAttachmentForViewer, setSelectedAttachmentForViewer] = useState<EvidenceAttachment | null>(null);
 
   // Vault Encryption State
@@ -276,7 +297,7 @@ export default function HomePage() {
         Number(form.paid) || 0,
         form.start,
         form.end,
-        form.sunday
+        form.dayType
       ),
     [form]
   );
@@ -289,19 +310,24 @@ export default function HomePage() {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   })();
 
+  const hydrationGeneration = useRef(0);
+  const hydrationTask = useRef<Promise<void> | null>(null);
+
   // Hydrate Data on Mount
   useEffect(() => {
     let isMounted = true;
+    const generation = ++hydrationGeneration.current;
+    const isCurrent = () => isMounted && generation === hydrationGeneration.current;
 
     async function loadData() {
       try {
         // 0. Check Mode Preference
         const savedMode = typeof window !== "undefined" ? window.localStorage.getItem("fairwork-profile-mode") : null;
         const isDemo = savedMode === "demo";
-        if (isMounted) setIsDemoMode(isDemo);
+        if (isCurrent()) setIsDemoMode(isDemo);
 
         if (isDemo) {
-          if (isMounted) {
+          if (isCurrent()) {
             setWorkArrangements([DEMO_ARRANGEMENT]);
             setActiveArrangementId(DEMO_ARRANGEMENT.id);
             setWorkerProfile(DEMO_PROFILE);
@@ -318,14 +344,14 @@ export default function HomePage() {
           }
         } else {
           const arrangements = await getAllWorkArrangements();
-          if (isMounted) {
+          if (isCurrent()) {
             setWorkArrangements(arrangements);
             setActiveArrangementId((current) => current || arrangements[0]?.id || null);
           }
 
           // 1. Worker Profile
           const profile = await getWorkerProfile();
-          if (isMounted) {
+          if (isCurrent()) {
             if (profile && profile.name) {
               setWorkerProfile(profile);
               if (profile.sector) {
@@ -349,7 +375,7 @@ export default function HomePage() {
               migratedShifts.filter((shift, index) => !dbShifts[index].arrangementId).map((shift) => saveShift(shift))
             );
           }
-          if (isMounted) {
+          if (isCurrent()) {
             if (migratedShifts && migratedShifts.length > 0) {
               setShifts(migratedShifts);
             } else {
@@ -367,14 +393,14 @@ export default function HomePage() {
               migratedIncidents.filter((incident, index) => !dbIncidents[index].arrangementId).map((incident) => saveIncident(incident))
             );
           }
-          if (isMounted && dbIncidents) {
+          if (isCurrent() && dbIncidents) {
             setIncidents(migratedIncidents);
           }
         }
 
         // Vault Meta
         const meta = await getVaultMetadata();
-        if (meta && isMounted) {
+        if (meta && isCurrent()) {
           setIsVaultConfigured(meta.isPinEnabled);
           setIsVaultLocked(meta.isPinEnabled && !vaultKey);
         }
@@ -382,25 +408,27 @@ export default function HomePage() {
         // Demo evidence is intentionally in-memory only. Never hydrate real
         // vault attachments into the synthetic demo journey.
         if (isDemo) {
-          if (isMounted) setEvidenceList([]);
+          if (isCurrent()) setEvidenceList([]);
         } else {
           const dbEvidence = await getAllEvidence();
-          if (isMounted && dbEvidence) {
+          if (isCurrent() && dbEvidence) {
             setEvidenceList(dbEvidence);
           }
         }
 
         // Query param screen
         const requested = new URLSearchParams(window.location.search).get("screen") || "home";
-        if (["home", "records", "incidents", "dossier", "regulator"].includes(requested) && isMounted) {
+        if (["home", "records", "incidents", "dossier", "regulator"].includes(requested) && isCurrent()) {
           setActive(requested);
         }
-      } catch (err) {
-        console.error("Hydration error:", err);
-      }
+    } catch (err) {
+      console.error("Hydration error:", err);
+    } finally {
+      if (isCurrent()) setHasHydrated(true);
+    }
     }
 
-    loadData();
+    hydrationTask.current = loadData();
 
     return () => {
       isMounted = false;
@@ -409,13 +437,20 @@ export default function HomePage() {
 
   // Toggle between Pre-filled Demo (Amina M.) and Clean Personal Profile
   const toggleProfileMode = async () => {
+    hydrationGeneration.current++;
+    setShiftAttachedEvidence([]);
+    setIncidentAttachedEvidence([]);
+    setIncidentType("");
+    setIncidentDescription("");
+    setShiftDraftId(createRecordId());
+    setIncidentDraftId(createRecordId());
     if (isDemoMode) {
       // Switch to Clean Profile
       setIsDemoMode(false);
       window.localStorage.setItem("fairwork-profile-mode", "clean");
 
       const savedProfile = await getWorkerProfile();
-      if (savedProfile && savedProfile.name && savedProfile.name !== "Amina M.") {
+      if (savedProfile && savedProfile.name) {
         setWorkerProfile(savedProfile);
         setIsFirstVisit(false);
       } else {
@@ -442,7 +477,7 @@ export default function HomePage() {
         end: "17:00",
         agreed: "",
         paid: "",
-        sunday: false,
+        dayType: "normal" as ShiftDayType,
         sector: (savedProfile?.sector as KenyanSector) || "construction",
       });
 
@@ -465,7 +500,7 @@ export default function HomePage() {
         end: "17:30",
         agreed: "1200",
         paid: "1000",
-        sunday: false,
+        dayType: "normal" as ShiftDayType,
         sector: "construction",
       });
       setIsFirstVisit(false);
@@ -775,7 +810,8 @@ export default function HomePage() {
       end: form.end,
       agreed: Number(form.agreed),
       paid: Number(form.paid),
-      sunday: form.sunday,
+      sunday: form.dayType !== "normal",
+      dayType: form.dayType,
       sector: form.sector,
       arrangementId: activeArrangement?.id,
       evidenceIds,
@@ -900,7 +936,7 @@ export default function HomePage() {
       shift.paid,
       shift.start,
       shift.end,
-      shift.sunday
+      shift.dayType ?? shift.sunday
     );
     return sum + res.totalClaim;
   }, 0);
@@ -912,7 +948,7 @@ export default function HomePage() {
       shift.paid,
       shift.start,
       shift.end,
-      shift.sunday
+      shift.dayType ?? shift.sunday
     );
     return sum + res.overtimeHours;
   }, 0);
@@ -1097,6 +1133,9 @@ export default function HomePage() {
               <button type="button" onClick={() => { setIsSyncModalOpen(true); setIsHeaderMenuOpen(false); }}>
                 <Cloud /><span><b>Cloud backup</b><small>{isDemoMode ? "Disabled while viewing demo data" : "Upload an encrypted backup"}</small></span>
               </button>
+              <button type="button" onClick={() => { setIsRecoveryModalOpen(true); setIsHeaderMenuOpen(false); }}>
+                <CloudDownload /><span><b>Request backed-up data</b><small>Restore records using your ID and Vault PIN</small></span>
+              </button>
               <button type="button" onClick={() => { setIsAssistantOpen(true); setIsHeaderMenuOpen(false); }}>
                 <Sparkles /><span><b>Rights assistant</b><small>Explain a record in plain language</small></span>
               </button>
@@ -1273,7 +1312,7 @@ export default function HomePage() {
                           shift.paid,
                           shift.start,
                           shift.end,
-                          shift.sunday
+                          shift.dayType ?? shift.sunday
                         );
                         const hasProof = shift.evidenceIds && shift.evidenceIds.length > 0;
 
@@ -1325,7 +1364,7 @@ export default function HomePage() {
                   <div className="secondary-title">
                     <div>
                       <h1>{t.incidentTitle}</h1>
-                      <p>Document workplace violations, injuries, or withheld pay.</p>
+                      <p>Document workplace abuse, injuries, or discrimination.</p>
                     </div>
                   </div>
 
@@ -1347,15 +1386,15 @@ export default function HomePage() {
 
                     <Button
                       variant="iosPlain"
-                      className={incidentType === "wages" ? "choice selected" : "choice"}
-                      onClick={() => setIncidentType("wages")}
+                      className={incidentType === "general" ? "choice selected" : "choice"}
+                      onClick={() => setIncidentType("general")}
                     >
                       <span className="choice-icon orange">
                         <Banknote />
                       </span>
                       <span>
-                        <strong>Wages withheld or deducted</strong>
-                        <small>Unlawful salary cut, unpaid overtime, delay</small>
+                        <strong>Workplace abuse or other concern</strong>
+                        <small>Bullying, harassment, threats, or mistreatment</small>
                       </span>
                       <ChevronRight />
                     </Button>
@@ -1391,7 +1430,7 @@ export default function HomePage() {
                         <textarea
                           value={incidentDescription}
                           onChange={(e) => setIncidentDescription(e.target.value)}
-                          placeholder="State what occurred, supervisor names, and location..."
+                          placeholder={incidentType === "general" ? "Describe the abuse or concern, when and where it happened, who was involved, and any witnesses..." : "State what occurred, supervisor names, and location..."}
                           required
                         />
                       </label>
@@ -1920,17 +1959,21 @@ export default function HomePage() {
             </div>
 
             <div className="form-footer">
-              <label className="check-line">
-                <input
-                  type="checkbox"
-                  checked={form.sunday}
-                  onChange={(e) => setForm({ ...form, sunday: e.target.checked })}
-                />
-                <span>
-                  <Check size={15} />
-                </span>
-                {t.rest} (Double Time 2.0×)
-              </label>
+              <fieldset className="shift-day-options">
+                <legend>{t.dayType}</legend>
+                {([
+                  ["normal", t.normalDay, t.normalHelp],
+                  ["rest_day", t.restDay, t.doubleHelp],
+                  ["public_holiday", t.holiday, t.doubleHelp],
+                ] as const).map(([value, label, help]) => (
+                  <label key={value}>
+                    <input type="radio" name="shift-day-type" value={value}
+                      checked={form.dayType === value}
+                      onChange={() => setForm({ ...form, dayType: value })} />
+                    <span><strong>{label}</strong><small>{help}</small></span>
+                  </label>
+                ))}
+              </fieldset>
               <Button variant="iosPrimary" className="save-button" type="submit" disabled={isSavingShift}>
                 {isSavingShift ? (
                   <>Saving…</>
@@ -1961,11 +2004,12 @@ export default function HomePage() {
               <small>Employment Act §§17–19</small>
             </div>
             <div>
-              <span>{t.overtime}</span>
+              <span>{form.dayType === "normal" ? t.overtime : form.dayType === "rest_day" ? t.restPay : t.holidayPay}</span>
               <strong>{money(auditResult.overtimePayDue)}</strong>
               <small>
-                {auditResult.overtimeHours.toFixed(1)} hrs × {form.sunday ? "2.0" : "1.5"}
+                {auditResult.overtimeHours.toFixed(1)} hrs × {form.dayType === "normal" ? "1.5" : "2.0"} × {money(auditResult.hourlyRate)}/hr
               </small>
+              <small>{lang === "en" ? "After payments; excludes wage shortfall" : "Baada ya malipo; bila upungufu wa mshahara"}</small>
             </div>
             <div className="claim-total">
               <span>{t.total}</span>
@@ -2007,7 +2051,7 @@ export default function HomePage() {
                     shift.paid,
                     shift.start,
                     shift.end,
-                    shift.sunday
+                    shift.dayType ?? shift.sunday
                   );
                   return (
                     <Button variant="iosPlain" className="ledger-row" key={shift.id}>
@@ -2195,6 +2239,19 @@ export default function HomePage() {
         lang={lang}
       />
 
+      {hasHydrated && !(isFirstVisit && isProfileModalOpen) && !isAssistantOpen && (
+        <button
+          type="button"
+          className="assistant-fab"
+          onClick={() => setIsAssistantOpen(true)}
+          aria-label="Open Fairwork rights assistant"
+          title="Ask the rights assistant"
+        >
+          <MessageCircle size={22} />
+          <span>Ask Fairwork</span>
+        </button>
+      )}
+
       {/* Feature-Phone Kitochi Simulator */}
       <FeaturePhoneModal
         isOpen={isFeaturePhoneOpen}
@@ -2210,6 +2267,7 @@ export default function HomePage() {
             agreed: ussdShift.agreed,
             paid: ussdShift.paid,
             sunday: false,
+            dayType: "normal" as ShiftDayType,
             sector: "construction",
             arrangementId: activeArrangement?.id,
           };
@@ -2230,6 +2288,7 @@ export default function HomePage() {
 
       {/* Cloud Sync to Supabase Modal */}
       <CloudSyncModal
+        key={workerProfile?.phone || ""}
         isOpen={isSyncModalOpen}
         onClose={() => setIsSyncModalOpen(false)}
         isVaultConfigured={isVaultConfigured}
@@ -2238,8 +2297,35 @@ export default function HomePage() {
         incidentCount={incidents.length}
         evidenceCount={evidenceList.length}
         isDemoMode={isDemoMode}
+        phone={workerProfile?.phone || ""}
         onSyncComplete={(res) => {
           showToast(`Backed up ${res.shifts} shifts, ${res.incidents} incidents to Supabase`);
+        }}
+      />
+
+      <BackupRecoveryModal
+        isOpen={isRecoveryModalOpen}
+        onClose={() => setIsRecoveryModalOpen(false)}
+        onRestored={async (counts) => {
+          const [profile, restoredShifts, restoredIncidents, restoredEvidence, restoredArrangements] = await Promise.all([
+            getWorkerProfile(),
+            getAllShifts(),
+            getAllIncidents(),
+            getAllEvidence(),
+            getAllWorkArrangements(),
+          ]);
+          setWorkerProfile(profile);
+          setShifts(restoredShifts);
+          setIncidents(restoredIncidents);
+          setEvidenceList(restoredEvidence);
+          setWorkArrangements(restoredArrangements);
+          setActiveArrangementId(restoredArrangements[0]?.id || null);
+          setIsVaultConfigured(true);
+          setVaultKey(null);
+          setIsVaultLocked(true);
+          setIsFirstVisit(false);
+          setIsProfileModalOpen(false);
+          showToast(`Restored ${counts.shifts} shifts, ${counts.incidents} incidents, and ${counts.evidence} evidence files`);
         }}
       />
 
@@ -2258,8 +2344,16 @@ export default function HomePage() {
         isFirstVisit={isFirstVisit}
         isDemoMode={isDemoMode}
         onToggleMode={toggleProfileMode}
+        onStartFresh={async () => {
+          hydrationGeneration.current++;
+          await hydrationTask.current;
+          await clearLocalVault();
+          window.localStorage.setItem("fairwork-profile-mode", "clean");
+          window.location.assign(window.location.pathname);
+        }}
         onProfileSaved={(saved) => {
           setWorkerProfile(saved);
+          if (isDemoMode) { showToast("Demo profile updated for this session"); return; }
           setIsDemoMode(false);
           setIsFirstVisit(false);
           window.localStorage.setItem("fairwork-profile-mode", "clean");

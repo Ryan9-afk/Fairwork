@@ -12,6 +12,7 @@ import {
   getAllEvidence,
   getAllWorkArrangements,
   getWorkerProfile,
+  getVaultMetadata,
 } from "@/lib/vault-db";
 import { encryptString } from "@/lib/crypto";
 
@@ -63,23 +64,112 @@ export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<
       };
     }
 
+    if (!user.phone || !user.phone_confirmed_at) {
+      return {
+        success: false,
+        uploadedShifts: 0,
+        uploadedIncidents: 0,
+        uploadedEvidence: 0,
+        uploadedArrangements: 0,
+        error: "Verify a phone number before uploading so you can recover this backup on another device.",
+        errors: ["A verified phone number is required for backup recovery."],
+      };
+    }
+
+    const workerProfile = await getWorkerProfile();
+    if (!workerProfile?.recoveryIdHash || !workerProfile.recoveryIdSaltBase64) {
+      return {
+        success: false,
+        uploadedShifts: 0,
+        uploadedIncidents: 0,
+        uploadedEvidence: 0,
+        uploadedArrangements: 0,
+        error: "Add your National ID verifier in your worker profile before uploading a recoverable backup.",
+        errors: ["Recovery identity is not set up."],
+      };
+    }
+    const vaultMetadata = await getVaultMetadata();
+    if (!vaultMetadata?.isPinEnabled) {
+      return {
+        success: false,
+        uploadedShifts: 0,
+        uploadedIncidents: 0,
+        uploadedEvidence: 0,
+        uploadedArrangements: 0,
+        error: "Set up your Vault PIN before uploading a recoverable backup.",
+        errors: ["Vault PIN is not set up."],
+      };
+    }
+
     // 0. Sync Worker Profile if present
     try {
-      const workerProfile = await getWorkerProfile();
-      if (workerProfile?.name) {
-        await supabase.from("profiles").upsert(
-          {
-            id: user.id,
-            display_name: workerProfile.name,
-            phone: workerProfile.phone || null,
-            preferred_sector: workerProfile.sector || "construction",
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "id" }
-        );
+      if (workerProfile.name) {
+        const profilePayload = {
+          id: user.id,
+          display_name: workerProfile.name,
+          phone: workerProfile.phone || null,
+          preferred_sector: workerProfile.sector || "construction",
+          updated_at: new Date().toISOString(),
+          ...(workerProfile.recoveryIdHash && workerProfile.recoveryIdSaltBase64
+            ? {
+                recovery_id_hash: workerProfile.recoveryIdHash,
+                recovery_id_salt: workerProfile.recoveryIdSaltBase64,
+              }
+            : {}),
+        };
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .upsert(profilePayload, { onConflict: "id" });
+        if (profileError) {
+          return {
+            success: false,
+            uploadedShifts: 0,
+            uploadedIncidents: 0,
+            uploadedEvidence: 0,
+            uploadedArrangements: 0,
+            error: `Worker profile recovery setup: ${profileError.message}`,
+            errors: [profileError.message],
+          };
+        }
       }
     } catch (profileErr) {
       console.warn("Failed to sync profile:", profileErr);
+    }
+
+    // The PIN verifier and random salt are needed to unlock a restored backup.
+    // They do not reveal the PIN; the PIN itself is never uploaded.
+    try {
+      const { error } = await supabase.from("vault_recovery_metadata").upsert(
+        {
+          user_id: user.id,
+          salt_base64: vaultMetadata.saltBase64,
+          verify_token_payload: vaultMetadata.verifyTokenPayload as unknown as import("@/types/supabase").Json,
+          created_at: vaultMetadata.createdAt,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
+      if (error) {
+        return {
+          success: false,
+          uploadedShifts: 0,
+          uploadedIncidents: 0,
+          uploadedEvidence: 0,
+          uploadedArrangements: 0,
+          error: `Vault recovery metadata: ${error.message}`,
+          errors: [error.message],
+        };
+      }
+    } catch (metadataError) {
+      return {
+        success: false,
+        uploadedShifts: 0,
+        uploadedIncidents: 0,
+        uploadedEvidence: 0,
+        uploadedArrangements: 0,
+        error: `Vault recovery metadata: ${String(metadataError)}`,
+        errors: [String(metadataError)],
+      };
     }
 
     // 1. Sync work arrangements first. This also lazily migrates legacy local
@@ -125,6 +215,7 @@ export async function syncVaultToSupabase(vaultKey?: CryptoKey | null): Promise<
         agreed_pay: shift.isEncrypted ? 0 : shift.agreed,
         amount_paid: shift.isEncrypted ? 0 : shift.paid,
         is_sunday_or_holiday: shift.sunday,
+        day_type: shift.dayType || (shift.sunday ? "rest_day" : "normal"),
         is_encrypted: !!shift.isEncrypted,
         ciphertext_payload: (shift.ciphertextPayload as unknown as import("@/types/supabase").Json) || null,
         updated_at: new Date().toISOString(),

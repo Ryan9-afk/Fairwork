@@ -9,6 +9,7 @@ import {
   decryptData,
   decryptString,
   deriveKeyFromPin,
+  deriveRecoveryIdVerifier,
   encryptBinary,
   encryptData,
   encryptString,
@@ -114,4 +115,17 @@ describe("vault verification token", () => {
     const token = await createVaultVerificationToken(key);
     expect(await verifyVaultKey(otherKey, token)).toBe(false);
   });
+});
+
+describe("backup recovery ID verifier", () => {
+  it("normalizes formatting and changes with the per-user salt", async () => {
+    const salt = generateSalt();
+    const formatted = await deriveRecoveryIdVerifier("12 345-678", salt);
+    const plain = await deriveRecoveryIdVerifier("12345678", salt);
+    const otherSalt = await deriveRecoveryIdVerifier("12345678", generateSalt());
+
+    expect(formatted).toBe(plain);
+    expect(otherSalt).not.toBe(plain);
+    expect(plain).not.toContain("12345678");
+  }, 30000);
 });

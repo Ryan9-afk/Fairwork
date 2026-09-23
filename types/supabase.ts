@@ -121,6 +121,8 @@ export type Database = {
           language_preference: string | null
           phone: string | null
           preferred_sector: string | null
+          recovery_id_hash: string | null
+          recovery_id_salt: string | null
           updated_at: string
         }
         Insert: {
@@ -130,6 +132,8 @@ export type Database = {
           language_preference?: string | null
           phone?: string | null
           preferred_sector?: string | null
+          recovery_id_hash?: string | null
+          recovery_id_salt?: string | null
           updated_at?: string
         }
         Update: {
@@ -139,6 +143,32 @@ export type Database = {
           language_preference?: string | null
           phone?: string | null
           preferred_sector?: string | null
+          recovery_id_hash?: string | null
+          recovery_id_salt?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      vault_recovery_metadata: {
+        Row: {
+          user_id: string
+          salt_base64: string
+          verify_token_payload: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          salt_base64: string
+          verify_token_payload: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          salt_base64?: string
+          verify_token_payload?: Json
+          created_at?: string
           updated_at?: string
         }
         Relationships: []
@@ -194,6 +224,7 @@ export type Database = {
           end_time: string | null
           id: number
           is_encrypted: boolean | null
+          day_type: string | null
           is_sunday_or_holiday: boolean | null
           location: string | null
           sector: string
@@ -213,6 +244,7 @@ export type Database = {
           end_time?: string | null
           id?: number
           is_encrypted?: boolean | null
+          day_type?: string | null
           is_sunday_or_holiday?: boolean | null
           location?: string | null
           sector?: string
@@ -232,6 +264,7 @@ export type Database = {
           end_time?: string | null
           id?: number
           is_encrypted?: boolean | null
+          day_type?: string | null
           is_sunday_or_holiday?: boolean | null
           location?: string | null
           sector?: string

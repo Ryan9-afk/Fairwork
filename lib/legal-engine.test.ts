@@ -97,7 +97,8 @@ describe("calculateSectorAudit", () => {
 
   it("applies the 2.0x multiplier on a Sunday or public holiday", () => {
     const result = calculateSectorAudit("construction", 1200, 1200, "08:00", "18:00", true);
-    expect(result.overtimePayDue).toBe(600);
+    expect(result.overtimeHours).toBe(10);
+    expect(result.overtimePayDue).toBe(1800);
   });
 
   it("derives the hourly rate from the entered pay, not a statutory figure", () => {
@@ -142,3 +143,21 @@ describe("calculateSectorAudit", () => {
     ]);
   });
 });
+
+ describe("day-type payment accounting", () => {
+  it.each(["rest_day", "public_holiday"] as const)("counts all hours on %s and credits ordinary pay", (day) => {
+    const result = calculateSectorAudit("construction", 800, 800, "08:00", "16:00", day);
+    expect(result.overtimeHours).toBe(8);
+    expect(result.overtimePayDue).toBe(800);
+    expect(result.totalClaim).toBe(800);
+  });
+  it("does not double-count unpaid holiday pay", () => {
+    const result = calculateSectorAudit("construction", 800, 0, "08:00", "16:00", "public_holiday");
+    expect(result.wageDeficit).toBe(800);
+    expect(result.totalClaim).toBe(1600);
+  });
+  it("credits overtime already paid", () => {
+    expect(calculateSectorAudit("construction", 800, 1100, "08:00", "18:00", "normal").totalClaim).toBe(0);
+    expect(calculateSectorAudit("construction", 800, 1600, "08:00", "16:00", "rest_day").totalClaim).toBe(0);
+  });
+ });

@@ -5,6 +5,7 @@
  */
 
 const PBKDF2_ITERATIONS = 100000;
+const RECOVERY_ID_ITERATIONS = 600000;
 const AES_KEY_LENGTH = 256;
 const IV_LENGTH_BYTES = 12; // 96-bit recommended IV for AES-GCM
 
@@ -66,6 +67,36 @@ export async function deriveKeyFromPin(pin: string, salt: Uint8Array): Promise<C
     false,
     ["encrypt", "decrypt"]
   );
+}
+
+/**
+ * Creates a slow, salted verifier for a National ID number. The raw ID never
+ * needs to leave the device; recovery compares this verifier after phone OTP.
+ */
+export async function deriveRecoveryIdVerifier(
+  nationalId: string,
+  salt: Uint8Array,
+): Promise<string> {
+  const normalizedId = nationalId.replace(/\D/g, "");
+  const encoder = new TextEncoder();
+  const baseKey = await window.crypto.subtle.importKey(
+    "raw",
+    encoder.encode(normalizedId),
+    { name: "PBKDF2" },
+    false,
+    ["deriveBits"],
+  );
+  const bits = await window.crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: salt as unknown as BufferSource,
+      iterations: RECOVERY_ID_ITERATIONS,
+      hash: "SHA-256",
+    },
+    baseKey,
+    256,
+  );
+  return bufferToBase64(bits);
 }
 
 /**

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Download, ExternalLink, FileText, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PdfPagePreview } from "@/components/pdf-page-preview";
 import { calculateSectorAudit, KenyanSector } from "@/lib/legal-engine";
 import type { EvidenceAttachment, StoredIncident, StoredShift, WorkerProfile } from "@/lib/vault-db";
 import type { WorkArrangement } from "@/lib/work-arrangements";
@@ -20,6 +21,11 @@ interface HakiDossierProps {
 }
 
 export function HakiDossier({ shifts, incidents, evidence, profile, isDemoMode, arrangements = [], onOpenEvidence }: HakiDossierProps) {
+  const [exportName, setExportName] = useState("Haki-Dossier");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const [pdf, setPdf] = useState<{ url: string; pages: number; filename: string } | null>(null);
+  useEffect(() => () => { if (pdf) URL.revokeObjectURL(pdf.url); }, [pdf]);
   const [includePersonal, setIncludePersonal] = useState(true);
   const [selectedShifts, setSelectedShifts] = useState(() => new Set(shifts.map((item) => item.id)));
   const [selectedIncidents, setSelectedIncidents] = useState(() => new Set(incidents.map((item) => item.id)));
@@ -58,7 +64,7 @@ export function HakiDossier({ shifts, incidents, evidence, profile, isDemoMode, 
   const chosenEvidence = evidence.filter((item) => selectedEvidence.has(item.id));
   const audits = useMemo(() => chosenShifts.map((shift) => ({
     shift,
-    audit: calculateSectorAudit((shift.sector as KenyanSector) || "construction", shift.agreed, shift.paid, shift.start, shift.end, shift.sunday),
+    audit: calculateSectorAudit((shift.sector as KenyanSector) || "construction", shift.agreed, shift.paid, shift.start, shift.end, shift.dayType ?? shift.sunday),
   })), [chosenShifts]);
   const recordedGap = audits.reduce((sum, item) => sum + item.audit.wageDeficit, 0);
   const estimatedEntitlement = audits.reduce((sum, item) => sum + item.audit.overtimePayDue, 0);
@@ -69,6 +75,25 @@ export function HakiDossier({ shifts, incidents, evidence, profile, isDemoMode, 
     setter(next);
   }
 
+  async function exportPdf(download: boolean) {
+    setExporting(true);
+    setExportError("");
+    try {
+      const { createDossierPdf, dossierFilename } = await import("@/lib/dossier-pdf");
+      const response = await fetch("/fonts/geist-latin.ttf");
+      if (!response.ok) throw new Error("Font unavailable");
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      const document = createDossierPdf({ shifts: chosenShifts, incidents: chosenIncidents, evidence: chosenEvidence, profile, arrangements, includePersonal, isDemoMode }, btoa(binary));
+      const filename = dossierFilename(exportName);
+      setPdf({ url: URL.createObjectURL(document.output("blob")), pages: document.getNumberOfPages(), filename });
+      if (download) document.save(filename);
+    } catch {
+      setExportError("The PDF could not be created. Please try again. If you are offline, reconnect once to load the export tools.");
+    } finally { setExporting(false); }
+  }
+
   return (
     <div className="dossier-workspace">
       <section className="dossier-controls" aria-label="Dossier export options">
@@ -77,6 +102,11 @@ export function HakiDossier({ shifts, incidents, evidence, profile, isDemoMode, 
           <p>Your original records stay unchanged.</p>
         </div>
         <label className="dossier-toggle"><input type="checkbox" checked={includePersonal} onChange={(event) => setIncludePersonal(event.target.checked)} /> Include personal details</label>
+        <label className="dossier-filename">
+          <span>PDF filename</span>
+          <input type="text" value={exportName} maxLength={90} onChange={(event) => setExportName(event.target.value)} aria-describedby="dossier-filename-help" />
+          <small id="dossier-filename-help">A timestamp is added to distinguish each download.</small>
+        </label>
         <details>
           <summary>Records ({chosenShifts.length + chosenIncidents.length})</summary>
           <div className="dossier-checklist">
@@ -159,9 +189,20 @@ export function HakiDossier({ shifts, incidents, evidence, profile, isDemoMode, 
         </section>
       </article>
 
-      <Button variant="iosPrimary" className="screen-action dossier-print-action" onClick={() => window.print()} disabled={!chosenShifts.length && !chosenIncidents.length}>
-        <Download /> Print or save selected dossier as PDF
-      </Button>
+      <div className="dossier-export-actions">
+        <Button variant="iosPrimary" className="screen-action" onClick={() => exportPdf(true)} disabled={exporting || (!chosenShifts.length && !chosenIncidents.length && !chosenEvidence.length)}>
+          <Download /> {exporting ? "Creating PDF…" : "Download dossier PDF"}
+        </Button>
+        <Button variant="iosTinted" onClick={() => exportPdf(false)} disabled={exporting || (!chosenShifts.length && !chosenIncidents.length && !chosenEvidence.length)}>Preview PDF pages</Button>
+        {exportError && <p role="alert">{exportError}</p>}
+      </div>
+      {pdf && <section className="dossier-pdf-preview" aria-label="Generated PDF">
+        <p role="status">Generated PDF · {pdf.pages} {pdf.pages === 1 ? "page" : "pages"}</p>
+        <small>This preview reflects the selections when it was generated. Generate again after making changes.</small>
+        <a href={pdf.url} download={pdf.filename}>Save {pdf.filename}</a>
+        <a href={pdf.url} target="_blank" rel="noreferrer">Open all PDF pages in a new tab</a>
+        <PdfPagePreview key={pdf.url} url={pdf.url} pages={pdf.pages} />
+      </section>}
     </div>
   );
 }

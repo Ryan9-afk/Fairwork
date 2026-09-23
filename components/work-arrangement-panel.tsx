@@ -60,7 +60,7 @@ function draftFromArrangement(arrangement?: WorkArrangement | null): Draft {
     sector: arrangement.sector,
     paymentBasis: arrangement.paymentBasis,
     employerOrClient: arrangement.employerOrClient || "",
-    customFields: arrangement.customFields || {},
+    customFields: Object.fromEntries(Object.entries(arrangement.customFields || {}).map(([key, value]) => [key.replace(/^Answer:\s*/i, ""), value])),
   };
 }
 
@@ -79,7 +79,7 @@ const KNOWN_FIELD_KEYS = new Set([
 ]);
 
 function humanizeFieldKey(key: string): string {
-  return key
+  return key.replace(/^Answer:\s*/i, "")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/[_-]+/g, " ")
     .replace(/^./, (character) => character.toUpperCase());
@@ -108,7 +108,7 @@ function readSuggestedValue(input: unknown): string {
 function followUpFields(answers: Record<string, string>): Record<string, string> {
   return Object.fromEntries(
     Object.entries(answers)
-      .map(([question, answer]) => [`Answer: ${question}`, answer.trim()] as const)
+      .map(([question, answer]) => [question.replace(/^Answer:\s*/i, ""), answer.trim()] as const)
       .filter(([, answer]) => answer)
   );
 }

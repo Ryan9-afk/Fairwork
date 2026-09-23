@@ -5,6 +5,7 @@ import { User, Phone, MapPin, Briefcase, Check, X, ShieldCheck, Sparkles } from 
 import { Button } from "@/components/ui/button";
 import { WorkerProfile, saveWorkerProfile } from "@/lib/vault-db";
 import { KenyanSector, SECTOR_CONFIGS, SECTOR_IDS } from "@/lib/legal-engine";
+import { bufferToBase64, deriveRecoveryIdVerifier, generateSalt } from "@/lib/crypto";
 
 interface WorkerProfileModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface WorkerProfileModalProps {
   isFirstVisit?: boolean;
   isDemoMode?: boolean;
   onToggleMode?: () => void;
+  onStartFresh?: () => Promise<void>;
 }
 
 export function WorkerProfileModal({
@@ -24,24 +26,30 @@ export function WorkerProfileModal({
   isFirstVisit = false,
   isDemoMode = false,
   onToggleMode,
+  onStartFresh,
 }: WorkerProfileModalProps) {
   const [name, setName] = useState(profile?.name || "");
   const [phone, setPhone] = useState(profile?.phone || "");
+  const [nationalId, setNationalId] = useState("");
   const [county, setCounty] = useState(profile?.county || "Nairobi");
   const [sector, setSector] = useState<KenyanSector>((profile?.sector as KenyanSector) || "construction");
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   /* eslint-disable react-hooks/set-state-in-effect -- the form mirrors the selected persisted profile */
   useEffect(() => {
     if (profile) {
       setName(profile.name || "");
       setPhone(profile.phone || "");
+      setNationalId("");
       setCounty(profile.county || "Nairobi");
       setSector((profile.sector as KenyanSector) || "construction");
     } else {
       setName("");
       setPhone("");
+      setNationalId("");
       setCounty("Nairobi");
       setSector("construction");
     }
@@ -60,18 +68,37 @@ export function WorkerProfileModal({
       return;
     }
 
+    const normalizedId = nationalId.replace(/\D/g, "");
+    if (normalizedId && !/^\d{6,10}$/.test(normalizedId)) {
+      setError("Enter a valid ID number using 6 to 10 digits.");
+      return;
+    }
+    if (isFirstVisit && !normalizedId && !profile?.recoveryIdHash) {
+      setError("Add your ID number so you can request your backed-up data later.");
+      return;
+    }
+
     setIsSaving(true);
     try {
+      let recoveryIdHash = profile?.recoveryIdHash;
+      let recoveryIdSaltBase64 = profile?.recoveryIdSaltBase64;
+      if (normalizedId) {
+        const salt = generateSalt();
+        recoveryIdHash = await deriveRecoveryIdVerifier(normalizedId, salt);
+        recoveryIdSaltBase64 = bufferToBase64(salt);
+      }
       const updated: WorkerProfile = {
         id: "current",
         name: trimmedName,
         phone: phone.trim() || undefined,
+        recoveryIdHash,
+        recoveryIdSaltBase64,
         county: county.trim() || "Nairobi",
         sector,
         updatedAt: new Date().toISOString(),
       };
 
-      await saveWorkerProfile(updated);
+      if (!isDemoMode) await saveWorkerProfile(updated);
       onProfileSaved(updated);
       onClose();
     } catch {
@@ -102,22 +129,27 @@ export function WorkerProfileModal({
           {onToggleMode && (
             <div className={`profile-mode-row ${isDemoMode ? "demo" : "personal"}`}>
               <span className="profile-mode-icon">{isDemoMode ? <Sparkles size={17} /> : <ShieldCheck size={17} />}</span>
-              <span><b>{isDemoMode ? "Sample journey" : "Personal records"}</b><small>{isDemoMode ? "Amina’s fictional records are loaded" : "A clean ledger for your own entries"}</small></span>
+              <span><b>{isDemoMode ? "Sample journey" : "Personal records"}</b><small>{isDemoMode ? "Amina’s fictional records are loaded" : "Your saved entries on this device"}</small></span>
               <button
                 type="button"
-                onClick={() => {
-                  onToggleMode();
-                  if (isDemoMode) {
-                    setName(""); setPhone(""); setCounty("Nairobi");
-                  } else {
-                    setName("Amina M."); setPhone("0712 345 678"); setCounty("Nairobi"); setSector("construction");
-                  }
-                }}
+                onClick={() => onToggleMode()}
               >
-                {isDemoMode ? "Start clean" : "Try demo"}
+                {isDemoMode ? "Return to my records" : "Try demo"}
               </button>
             </div>
           )}
+
+          {onStartFresh && <div className="profile-reset">
+            {confirmReset ? <>
+              <p>Start a fresh ledger? This deletes your profile, shifts, incidents, attachments, work arrangements, and PIN from this device. Cloud backups stay unchanged. Download your dossier first if needed.</p>
+              <Button type="button" disabled={isResetting} onClick={async () => {
+                setIsResetting(true); setError("");
+                try { await onStartFresh(); }
+                catch { setError("Your ledger could not be reset. Please try again."); setIsResetting(false); }
+              }}>{isResetting ? "Clearing device records…" : "Delete device records and start fresh"}</Button>
+              <Button type="button" variant="iosPlain" disabled={isResetting} onClick={() => setConfirmReset(false)}>Keep my records</Button>
+            </> : <Button type="button" variant="iosPlain" onClick={() => setConfirmReset(true)}>Start a fresh ledger</Button>}
+          </div>}
 
           <form id="worker-profile-form" onSubmit={handleSubmit} className="profile-form">
             <label className="profile-field profile-name-field">
@@ -171,7 +203,22 @@ export function WorkerProfileModal({
               <small id="profile-phone-help">Helps match payment proof to your records.</small>
             </label>
 
-            <p className="profile-privacy-note"><ShieldCheck size={16} /><span><b>Saved on this device.</b> Profile details are uploaded only if you choose cloud backup.</span></p>
+            <label className="profile-field">
+              <span><ShieldCheck size={15} /> National ID number {isFirstVisit && <b>Required</b>}</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={nationalId}
+                onChange={(e) => setNationalId(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                placeholder={profile?.recoveryIdHash ? "Saved securely · enter to update" : "6–10 digits"}
+                aria-describedby="profile-id-help"
+                required={isFirstVisit && !profile?.recoveryIdHash}
+              />
+              <small id="profile-id-help">Used to match a recovery request. Only a salted verifier is stored; the ID number is not uploaded.</small>
+            </label>
+
+            <p className="profile-privacy-note"><ShieldCheck size={16} /><span><b>Your records stay private.</b> Recovery needs a verified phone and your vault PIN. Your ID number and PIN are never sent to Supabase.</span></p>
 
           {error && (
               <div className="profile-error" role="alert">{error}</div>

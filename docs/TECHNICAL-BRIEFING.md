@@ -23,6 +23,7 @@
    - 5.9 Local-first storage (IndexedDB)
    - 5.10 Row Level Security (tenant isolation)
    - 5.11 Chain of custody and tamper-evidence
+   - 5.12 Application stack
 6. How the app works, step by step
 7. The legal rules engine
 8. The AI assistant and its guardrails
@@ -38,7 +39,7 @@
 
 ## 1. The one-paragraph summary
 
-Fairwork Pulse is a **pocket work-record and evidence wallet**. A person logs what they did and what they were paid. The app calculates the gap between what was agreed and what was actually received, plus an estimate of overtime from the agreed rate; it stores that record **encrypted on their own device**, and lets them attach evidence (M-Pesa messages, receipts, injury cards) whose **digital fingerprint** is recorded so later tampering is detectable. The AI only *explains*; a separate deterministic rules engine does the arithmetic. Cloud backup is optional, and when a PIN is set, the sensitive content is uploaded as ciphertext the server cannot read.
+Fairwork Pulse is a **work-record and evidence wallet**. A person logs their shift, the pay agreed, the money received, and the type of day. The app separates an entered pay gap from an indicative overtime or rest-day estimate, stores records locally, and can protect sensitive content with a PIN-based encrypted vault. Evidence attachments receive a SHA-256 fingerprint so later changes to those exact bytes can be detected. The AI helps explain rights and work arrangements; a deterministic rules engine performs the arithmetic. Optional cloud backup uses row-level access controls and, with a PIN active, stores sensitive fields as ciphertext.
 
 ---
 
@@ -70,11 +71,14 @@ Fairwork Pulse attacks all five: log now, calculate accurately, preserve integri
 
 ## 4. What the product actually does
 
-- **Records shifts/jobs** — employer, site, times, what was agreed, what was actually received, whether it was a Sunday/public holiday.
-- **Calculates** statutory shortfall and overtime (see section 7).
+- **Records shifts/jobs** — employer or contractor, location, times, agreed pay, payment received, and one of three day types: normal working day, weekly rest day, or public holiday.
+- **Calculates** the recorded agreed-pay gap and a separate estimated additional entitlement using the selected day type (see section 7).
 - **Stores everything locally first** on the device (works offline).
 - **Attaches evidence** with a SHA-256 fingerprint and payment-type detection.
 - **Compiles a "Haki Dossier"** — an organised package (shifts, calculations, evidence index) to take to an adviser, union, or labour officer.
+- **Exports and previews a multi-page PDF dossier** — the filename can be chosen, a timestamp distinguishes repeated downloads, and the page preview includes page navigation.
+- **Separates wage incidents from other workplace concerns** — wage withholding and deductions are logged with shift/pay records; the incident flow covers injury, general abuse or another concern, and maternity discrimination.
+- **Starts a fresh ledger deliberately** — a clear-reset action confirms the choice, clears local device-vault records, and then reloads the clean state.
 - **Optional encrypted cloud backup** to Supabase.
 - **AI assistant** that explains rights and helps set up a work profile, in English or Kiswahili.
 - **(Vision) Union/regulator view** — anonymised, aggregated trends (currently illustrative sample data).
@@ -194,17 +198,21 @@ Why it matters: even if there were a bug in our application code, the database i
 
 We do **not** claim this makes evidence automatically admissible. We claim it helps a human demonstrate that a file has not changed since capture.
 
+### 5.12 Application stack
+
+The interface uses **Next.js 16, React 19, TypeScript, and Vinext on Vite**, with Tailwind CSS 4 for styling. Shift, incident, and evidence records are stored locally in **IndexedDB**. The browser's **Web Crypto API** derives vault keys with PBKDF2/SHA-256 (100,000 iterations) and encrypts sensitive data with AES-GCM-256. **jsPDF** builds the dossier and **pdfjs-dist** previews its pages. Optional cloud sync uses **Supabase/Postgres** with row-level security; the server-side **DeepSeek** helper uses Zod-shaped responses and a deterministic fallback. **Vitest** covers application rules and important storage paths.
+
 ---
 
 ## 6. How the app works, step by step
 
 1. **Open the app** → it loads locally first (offline-capable).
 2. **Set up a work arrangement** → choose the type of work (sector) and how pay works (salary, hourly, daily, per project, etc.). You can keep several arrangements (e.g. a day job and weekend gigs) separate.
-3. **Set a vault PIN** *(see the known gap in section 12)* → the app derives the key, creates the verification token, and switches to encrypted storage.
-4. **Log a shift** → enter employer, site, start/end time, agreed pay, amount received, and whether it was a Sunday/public holiday.
-5. **See the calculation** → the rules engine shows the recorded shortfall and an *estimated* overtime entitlement, clearly labelled "recorded" vs. "needs review."
+3. **Set a vault PIN** from the visible header action → the app derives the key, creates the verification token, and switches to encrypted storage.
+4. **Log a shift** → enter employer, location, date and times, agreed pay, and amount received. Choose normal working day, weekly rest day, or public holiday.
+5. **See the live calculation** → the rules engine updates the recorded pay gap, estimated additional entitlement, and total as the form changes. Estimates are labelled for review.
 6. **Attach evidence** → the file is hashed (SHA-256), tagged (M-Pesa/receipt/bank), and, with a PIN active, encrypted; only ciphertext is persisted.
-7. **Compile the Haki Dossier** → shifts, calculations, and the evidence index in one package.
+7. **Compile the Haki Dossier** → choose the records and evidence to include, name the PDF, download it, and preview its pages.
 8. **Optional cloud backup** → encrypted rows sync to Supabase (idempotent upserts).
 9. **(Vision) Union/regulator view** → anonymised aggregates by region.
 
@@ -214,25 +222,24 @@ We do **not** claim this makes evidence automatically admissible. We claim it he
 
 This is plain, deterministic code (`lib/legal-engine.ts`). Same inputs → same outputs, every time. That is deliberate: **money math must be auditable, not "AI-generated."**
 
-For each shift it computes:
+For each shift it computes from the worker's entered pay and working times:
 
-- **Wage deficit** = agreed pay − amount actually received (never below zero). Treated as a **recorded fact**.
-- **Overtime hours** = hours beyond the standard 8-hour day.
-- **Overtime pay due** = overtime hours × (hourly rate derived from agreed pay) × multiplier.
-  - **1.5×** on a normal day.
-  - **2.0×** on a Sunday or public holiday.
-- **Total indicated claim** = wage deficit + overtime pay due.
+- **Wage deficit** = agreed pay − amount received, never below zero. It is shown separately from the estimated additional entitlement.
+- **Normal working day** — overtime hours are hours beyond 8; the hourly reference is the entered agreed pay divided by 8; the estimate applies a 1.5× multiplier to those extra hours.
+- **Weekly rest day or public holiday** — the estimate applies 2.0× to every recorded working hour. The expected amount is compared with the recorded payment; it does not add the agreed daily amount a second time.
+- **Estimated additional entitlement** = the additional amount still indicated after recorded payments, excluding the agreed-pay gap already shown separately. The total does not count the same amount twice.
+- **Total indicated claim** = unpaid agreed amount + estimated additional entitlement.
 - Marks line items **"recorded"** vs **"needs review."**
 
-**No minimum-wage comparison is applied.** The engine does not check pay against a statutory minimum, because a worker may have freely agreed a different price. The agreed figure entered is the basis, and each overtime figure is labelled an estimate for human review.
+**Calculation limits:** no minimum-wage comparison is applied. The engine does not check pay against a statutory minimum. For normal days it uses a simple 8-hour-per-shift threshold and derives an hourly estimate from the worker-entered agreed daily pay divided by eight. For rest days and public holidays it applies 2× to recorded hours. The worker chooses the day type; the app does not infer it from a calendar. The same assumptions apply across sectors. The prototype does not model the General Order's weekly overtime threshold, sector-specific orders, breaks, split shifts, or contractual variations. These estimates organise a record; they are not a dependable legal entitlement calculation. A reviewed calculation needs weekly hours, the applicable wage order and pay basis, breaks, contract terms, and other facts. Confirm the applicable rules with an adviser before relying on a figure.
 
 It also handles **cross-midnight shifts** (e.g. 20:00–04:00).
 
-**Statutory anchors (verify against current orders before publication):**
+**Statutory anchors (official Kenya Law references checked 23 September 2026):**
 
-- **Employment Act, 2007** — prompt payment and prohibition of unlawful deductions (§§ 17–19); weekly rest day (§ 27); maternity protection (§ 29); termination (§ 35).
-- **Regulation of Wages (General) Order** — standard hours; overtime multipliers.
-- **Work Injury Benefits Act (WIBA), 2007** — employer liability for workplace injury and medical costs.
+- [**Employment Act, 2007, revised 26 April 2024**](https://new.kenyalaw.org/akn/ke/act/2007/11/eng%402024-04-26) — wages and deductions (§§ 17–19); weekly rest (§ 27); maternity leave (§ 29); termination (§ 35).
+- [**Regulation of Wages (General) Order**](https://new.kenyalaw.org/akn/ke/act/ln/1982/120/eng%402022-12-31/source) — the General Order normally sets a 52-hour week spread over six days, with overtime beyond the normal weekly hours at 1.5× and work on the employee's normal rest day or public holiday at 2×. Other orders and employment terms can apply.
+- [**Work Injury Benefits Act, 2007**](https://new.kenyalaw.org/akn/ke/act/2007/13/eng%402022-12-31/source.pdf) — compensation for work-related injury and disease.
 
 **What it does NOT do:** it does not decide liability, does not classify anyone as employee vs. contractor, does not assign social class, and does not guarantee any amount. It produces *indicative* figures for discussion and flags what needs human review.
 
@@ -248,6 +255,7 @@ The assistant (DeepSeek, called from our **server** so the API key never reaches
 4. **Source grounding.** The model may only cite source IDs from an allow-list; anything else is filtered out.
 5. **Graceful fallback.** If the key is missing or the API fails, the app falls back to a deterministic offline message instead of breaking.
 6. **Confirmation-first records.** Suggestions show assumptions, missing questions, and a confidence level, and nothing is saved without the worker confirming.
+7. **Clean AI field labels.** AI-filled work-detail names have the accidental `Answer:` prefix removed before they are presented.
 
 This "responsible AI" separation is a differentiator: most teams wrap everything in an LLM; we keep legal and financial logic deterministic.
 
@@ -296,7 +304,7 @@ Being upfront about these builds credibility and protects the team in Q&A.
 1. **PIN creation is now reachable** — a visible **"Set PIN"** chip in the header opens the vault setup (previously it was hidden until a PIN already existed).
 2. **Minimum-wage comparison was removed by design.** The engine reports only the agreed-vs-paid gap and overtime from the entered rate; it deliberately does not assert a statutory minimum. Overtime remains an estimate that needs human review.
 3. **Deployments can go stale.** The live site was previously 11 commits behind, so its CSS did not match the code. Always confirm the deployed commit.
-4. **No test coverage existed until recently**; we have now added unit tests for the rules engine, crypto, routing, and the AI fallback.
+4. **Test coverage is growing.** Vitest currently covers the rules engine, vault/reset paths, dossier PDF generation, and related flows; a fuller device, browser, and cloud integration matrix is still needed.
 5. **Anonymous sign-in** is used for the demo; production needs real identity, consent, and a data-protection review.
 6. **Losing the PIN — or the phone — means losing access.** That is the cost of zero-knowledge; accounts plus a recovery phrase are the next milestone (see section 16).
 
@@ -339,11 +347,11 @@ Being upfront about these builds credibility and protects the team in Q&A.
 
 ## 15. Suggested demo script (short)
 
-1. Open the app; show the **work record** screen and the **audit calculation** on a logged shift.
-2. **Turn off Wi-Fi**; log another shift and show the fallback still works. Turn it back on and sync.
-3. Attach an **M-Pesa screenshot**; show its **SHA-256 fingerprint**; edit the image and show the fingerprint change.
-4. Open the **Haki Dossier** — shifts, calculations, evidence index.
-5. Close with the **union/regulator** aggregate view (clearly labelled illustrative) and the **feature-phone** channel.
+1. Open **Log a shift**, enter the location, pay, and hours, then compare the normal-day, rest-day, and public-holiday choices as the audit updates.
+2. Point out that overtime and the total indicated claim are calculated below the form; explain that the displayed amounts are estimates for review.
+3. In **Record what happened**, show workplace injury, workplace abuse or another concern, and maternity discrimination. Wage withholding and deductions stay with the shift/pay record.
+4. Open the **Haki Dossier**, edit the download name, review both pages with the page controls, and download the PDF.
+5. Show **Start fresh** and its confirmation using demo data, then close with the union/regulator and feature-phone views labelled illustrative/simulated.
 
 Keep it to one worker's story: *record → calculate → preserve → share → aggregate.*
 
@@ -364,15 +372,7 @@ Use this **after** the demo, as the final slide. Rule: sequence it, tie each ite
 4. **Consented, anonymised aggregates** — give unions and labour officers the regional trends view, built on explicit consent and a privacy review.
 5. **Sustainability** — who pays: unions, NGOs, county governments, insurers, or employers for compliance, with a free tier for individual workers.
 
-**One-line framing:** *"We built the hard part first — client-side encrypted evidence and deterministic statutory math. Next is making it portable and recoverable: accounts, a recovery phrase, and export."*
-
-**Slide outline (5 bullets)**
-
-- Where we are: encrypted device vault + deterministic wage audit + SHA-256 evidence integrity.
-- Next: **accounts + recovery phrase** — a career-long record, not a device-bound one.
-- Next: **export/portability** — the record outlives the app.
-- Next: **real WhatsApp/USSD** + consented union/regulator aggregates.
-- Sustainable at scale: unions, NGOs, counties, insurers, employer compliance.
+**One-line framing:** *"We built the hard part first — client-side encrypted evidence and transparent indicative wage estimates. Next is making it portable and recoverable: accounts, a recovery phrase, and export."*
 
 ---
 

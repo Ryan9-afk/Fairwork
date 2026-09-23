@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { syncVaultToSupabase } from "@/utils/supabase/sync";
+import { beginPhoneLink, normalizeKenyanPhone, verifyPhoneLink } from "@/utils/supabase/recovery";
 
 interface CloudSyncModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ interface CloudSyncModalProps {
   incidentCount: number;
   evidenceCount: number;
   isDemoMode?: boolean;
+  phone?: string;
   onSyncComplete?: (result: { shifts: number; incidents: number; evidence: number }) => void;
 }
 
@@ -35,12 +37,17 @@ export function CloudSyncModal({
   incidentCount,
   evidenceCount,
   isDemoMode = false,
+  phone = "",
   onSyncComplete,
 }: CloudSyncModalProps) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<"idle" | "success" | "error">("idle");
   const [statusMessage, setStatusMessage] = useState("");
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [recoveryPhone, setRecoveryPhone] = useState(phone);
+  const [phoneCode, setPhoneCode] = useState("");
+  const [phoneVerificationSent, setPhoneVerificationSent] = useState(false);
+  const [pendingPhoneUserId, setPendingPhoneUserId] = useState("");
 
   if (!isOpen) return null;
 
@@ -52,9 +59,32 @@ export function CloudSyncModal({
     }
     setIsSyncing(true);
     setSyncStatus("idle");
-    setStatusMessage("Synchronizing encrypted records with Supabase...");
+    setStatusMessage("Preparing secure backup...");
 
     try {
+      if (!isVaultConfigured || !vaultKey) {
+        throw new Error("Unlock or set up your Vault PIN first. Recoverable backups require the PIN.");
+      }
+      const normalizedPhone = normalizeKenyanPhone(recoveryPhone);
+      if (!normalizedPhone) {
+        throw new Error("Enter a valid phone number, including +254 or a Kenyan number starting with 07 or 01.");
+      }
+      if (phoneVerificationSent) {
+        await verifyPhoneLink(normalizedPhone, phoneCode, pendingPhoneUserId);
+        setPhoneVerificationSent(false);
+        setPendingPhoneUserId("");
+        setPhoneCode("");
+      } else {
+        const linkStatus = await beginPhoneLink(normalizedPhone);
+        if (linkStatus.status === "code-sent") {
+          setPhoneVerificationSent(true);
+          setPendingPhoneUserId(linkStatus.userId);
+          setStatusMessage(`A verification code was sent to ${normalizedPhone}. Enter it below to link this backup to your phone.`);
+          return;
+        }
+      }
+
+      setStatusMessage("Synchronizing encrypted records with Supabase...");
       const result = await syncVaultToSupabase(vaultKey);
 
       if (result.success) {
@@ -182,6 +212,56 @@ export function CloudSyncModal({
           </div>
         )}
 
+        {syncStatus === "idle" && statusMessage && (
+          <div role="status" className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+            {statusMessage}
+          </div>
+        )}
+
+        <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/70 p-3.5">
+          <strong className="block text-xs font-semibold text-blue-950">Set up backup recovery</strong>
+          <p className="mt-1 text-[11px] leading-relaxed text-blue-900/80">
+            Link a phone you can access. Recovery uses an SMS code, your ID number, and your Vault PIN. The ID and PIN stay on this device.
+          </p>
+          <label className="mt-3 block text-[11px] font-semibold text-gray-700">
+            Phone number
+            <input
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              value={recoveryPhone}
+              onChange={(event) => setRecoveryPhone(event.target.value)}
+              placeholder="0712 345 678 or +254 712 345 678"
+              className="mt-1.5 h-11 w-full rounded-xl border border-blue-100 bg-white px-3 text-sm font-normal text-gray-900 outline-none focus:border-blue-500"
+              disabled={isSyncing || phoneVerificationSent}
+            />
+          </label>
+          {phoneVerificationSent && (
+            <>
+              <label className="mt-3 block text-[11px] font-semibold text-gray-700">
+                SMS verification code
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={8}
+                  value={phoneCode}
+                  onChange={(event) => setPhoneCode(event.target.value.replace(/\D/g, ""))}
+                  placeholder="Enter the code"
+                  className="mt-1.5 h-11 w-full rounded-xl border border-blue-100 bg-white px-3 text-center text-lg tracking-[0.3em] text-gray-900 outline-none focus:border-blue-500"
+                  disabled={isSyncing}
+                />
+              </label>
+              <button
+                type="button"
+                className="mt-2 text-[11px] font-semibold text-blue-700"
+                onClick={() => { setPhoneVerificationSent(false); setPendingPhoneUserId(""); setPhoneCode(""); setStatusMessage(""); }}
+                disabled={isSyncing}
+              >Use a different phone number</button>
+            </>
+          )}
+        </div>
+
         {/* Actions */}
         <div className="flex gap-2">
           <Button
@@ -196,7 +276,7 @@ export function CloudSyncModal({
           <Button
             variant="iosPrimary"
             onClick={handleTriggerSync}
-            disabled={isSyncing}
+            disabled={isSyncing || (phoneVerificationSent && phoneCode.length < 4)}
             className="flex-2 rounded-2xl h-11 flex items-center justify-center gap-2"
           >
             {isSyncing ? (
@@ -207,7 +287,7 @@ export function CloudSyncModal({
             ) : (
               <>
                 <Cloud size={16} />
-                <span>{isDemoMode ? "Demo upload disabled" : "Upload backup"}</span>
+                <span>{isDemoMode ? "Demo upload disabled" : phoneVerificationSent ? "Verify & upload" : "Verify phone & upload"}</span>
               </>
             )}
           </Button>

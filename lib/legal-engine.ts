@@ -34,6 +34,7 @@ export const SECTOR_IDS = [
 ] as const;
 
 export type KenyanSector = (typeof SECTOR_IDS)[number];
+export type ShiftDayType = "normal" | "rest_day" | "public_holiday";
 
 export interface StatutoryCitation {
   act: string;
@@ -283,25 +284,31 @@ export function calculateSectorAudit(
   amountReceived: number,
   startTime: string,
   endTime: string,
-  isSundayOrRestDay: boolean
+  dayType: ShiftDayType | boolean
 ): ShiftAuditResult {
   const config = getSectorConfig(sector);
+  // Accept the legacy combined flag for existing device records.
+  const isRestDay = dayType === true || dayType === "rest_day" || dayType === "public_holiday";
   const totalHours = parseHoursBetween(startTime, endTime);
-  const standardHours = Math.min(totalHours, config.standardDailyHours);
-  const overtimeHours = Math.max(0, totalHours - config.standardDailyHours);
+  const standardHours = isRestDay ? 0 : Math.min(totalHours, config.standardDailyHours);
+  const overtimeHours = isRestDay ? totalHours : Math.max(0, totalHours - config.standardDailyHours);
 
   // The hourly rate is derived from the worker's own agreed pay. When no agreed
   // pay is entered there is nothing to derive from, so overtime is estimated as
   // zero rather than inventing a statutory rate.
   const hourlyRate = agreedPay > 0 ? agreedPay / config.standardDailyHours : 0;
 
-  const multiplier = isSundayOrRestDay
+  const multiplier = isRestDay
     ? config.restDayOvertimeMultiplier
     : config.normalOvertimeMultiplier;
 
-  const overtimePayDue = overtimeHours * hourlyRate * multiplier;
   const wageDeficit = Math.max(0, agreedPay - amountReceived);
-  const totalClaim = wageDeficit + overtimePayDue;
+  const premiumPay = overtimeHours * hourlyRate * multiplier;
+  // Double time replaces normal pay for those hours. Do not add the daily
+  // agreement again or claim overtime that has already been paid.
+  const expectedPay = isRestDay ? Math.max(agreedPay, premiumPay) : agreedPay + premiumPay;
+  const totalClaim = Math.max(0, expectedPay - amountReceived);
+  const overtimePayDue = Math.max(0, totalClaim - wageDeficit);
 
   return {
     totalHours,
@@ -317,7 +324,7 @@ export function calculateSectorAudit(
       { id: "agreed-pay", label: "Agreed pay", amount: agreedPay, kind: "recorded", explanation: "The amount entered as agreed for this shift.", reviewStatus: "recorded" },
       { id: "payment-received", label: "Payment recorded", amount: amountReceived, kind: "recorded", explanation: "The amount entered as received for this shift.", reviewStatus: "recorded" },
       { id: "payment-gap", label: "Unpaid agreed amount", amount: wageDeficit, kind: "recorded", explanation: "Agreed pay minus the payment recorded, never below zero.", ruleId: "EMP-17-19", sourceUrl: "https://new.kenyalaw.org/akn/ke/act/2007/11/eng@2012-01-02", reviewStatus: "recorded" },
-      { id: "overtime-estimate", label: "Estimated additional entitlement", amount: overtimePayDue, kind: "estimate", explanation: `${overtimeHours.toFixed(1)} hours above ${config.standardDailyHours} hours, using a ${multiplier.toFixed(1)}x multiplier and an hourly rate derived from the entered daily pay.`, ruleId: "WAGES-R5-6", sourceUrl: "https://new.kenyalaw.org/", reviewStatus: "needs-review" },
+      { id: "overtime-estimate", label: "Estimated additional entitlement", amount: overtimePayDue, kind: "estimate", explanation: `${overtimeHours.toFixed(1)} ${isRestDay ? "hours worked on a rest day or public holiday" : `hours above ${config.standardDailyHours} hours`} × ${multiplier.toFixed(1)} × KSh ${hourlyRate.toFixed(2)}/hour. Additional amount still due after recorded payments, excluding the unpaid agreed amount shown separately.`, ruleId: "WAGES-R5-6", sourceUrl: "https://new.kenyalaw.org/", reviewStatus: "needs-review" },
     ],
     assumptions: [
       "Times entered represent working time; unpaid breaks have not been deducted.",

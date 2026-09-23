@@ -35,6 +35,7 @@ export interface StoredShift {
   agreed: number;
   paid: number;
   sunday: boolean;
+  dayType?: import("./legal-engine").ShiftDayType;
   sector?: string;
   evidenceIds?: string[];
   arrangementId?: string;
@@ -45,7 +46,7 @@ export interface StoredShift {
 export interface StoredIncident {
   id: number;
   date: string; // Plaintext searchable index
-  category: "injury" | "wages" | "maternity" | "termination" | "safety";
+  category: "general" | "injury" | "wages" | "maternity" | "termination" | "safety";
   description: string;
   employer?: string;
   location?: string;
@@ -70,6 +71,8 @@ export interface WorkerProfile {
   id: "current";
   name: string;
   phone?: string;
+  recoveryIdHash?: string;
+  recoveryIdSaltBase64?: string;
   county?: string;
   sector?: string;
   updatedAt: string;
@@ -465,6 +468,16 @@ export async function updateEvidenceAttachment(attachment: EvidenceAttachment): 
   });
 }
 
+/** Persist a complete evidence record received from an encrypted cloud restore. */
+export async function saveEvidenceRecord(attachment: EvidenceAttachment): Promise<void> {
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction("evidence", "readwrite").objectStore("evidence").put(attachment);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
 export async function getEvidenceForParent(
   parentType: "shift" | "incident",
   parentId: number | string
@@ -494,5 +507,24 @@ export async function getAllEvidence(): Promise<EvidenceAttachment[]> {
       resolve(all);
     };
     req.onerror = () => reject(req.error);
+  });
+}
+
+/** Clear all device records atomically; called only after the reset confirmation. */
+export async function clearLocalVault(): Promise<void> {
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(Array.from(db.objectStoreNames), "readwrite");
+    for (const name of Array.from(db.objectStoreNames)) transaction.objectStore(name).clear();
+    transaction.oncomplete = () => {
+      db.close();
+      try {
+        window.localStorage.removeItem("fairwork-worker-profile");
+        window.localStorage.removeItem("fairwork-pulse-shifts");
+        resolve();
+      } catch (error) { reject(error); }
+    };
+    transaction.onabort = () => { db.close(); reject(transaction.error || new Error("Reset cancelled")); };
+    transaction.onerror = () => { /* onabort reports the failure after rollback */ };
   });
 }

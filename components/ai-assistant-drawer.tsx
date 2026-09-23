@@ -167,8 +167,8 @@ export function AIAssistantDrawer({ isOpen, onClose, lang }: AIAssistantDrawerPr
         ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
-      <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-gray-100 flex flex-col h-[85vh] max-h-[700px] overflow-hidden">
+    <div className="fixed inset-x-3 bottom-[92px] z-[65] flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-200 sm:inset-x-auto sm:bottom-6 sm:right-6">
+      <div role="dialog" aria-modal="false" aria-label="AI Legal Rights Assistant" className="flex h-[min(72dvh,680px)] min-h-[390px] w-full max-w-[420px] flex-col overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-2xl">
         {/* Header */}
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-blue-50/50 to-indigo-50/30">
           <div className="flex items-center gap-2.5">
@@ -187,6 +187,7 @@ export function AIAssistantDrawer({ isOpen, onClose, lang }: AIAssistantDrawerPr
           </div>
           <button
             onClick={onClose}
+            aria-label="Close rights assistant"
             className="text-gray-400 hover:text-gray-600 p-1.5 rounded-full hover:bg-gray-100"
           >
             <X size={19} />
