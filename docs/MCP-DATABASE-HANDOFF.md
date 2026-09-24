@@ -1,7 +1,7 @@
 # Fairwork Pulse — MCP Database Handoff & Migration Status
 
 **Date**: 22 September 2026  
-**Status**: All migrations applied and verified via Supabase MCP  
+**Status**: Historical report as of 22 September only. See [the current Supabase handoff](SUPABASE-HANDOFF.md) for pending 23 September migrations and recovery verification.  
 **Environment**: Supabase PostgreSQL (Remote) & Next.js/Vinext App Shell  
 
 ---
